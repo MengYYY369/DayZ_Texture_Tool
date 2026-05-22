@@ -47,3 +47,29 @@ python -m dayz_texture_tool
 ```powershell
 python -m unittest discover -s tests
 ```
+
+## 打包
+
+先安装运行依赖和 PyInstaller：
+
+```powershell
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
+```
+
+执行打包脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1
+```
+
+脚本会先运行测试，再通过 `DayZ_Texture_Tool.spec` 打包，输出到：
+
+- `release\DayZ_Texture_Tool\`
+- `release\DayZ_Texture_Tool.zip`
+
+如果需要跳过测试：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package.ps1 -SkipTests
+```
