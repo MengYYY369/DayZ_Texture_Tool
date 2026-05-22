@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dayz-texture-tool"
+version = "0.1.0"
+description = "DayZ texture conversion desktop tool"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "tkinterdnd2>=0.4.2",
+    "Pillow>=10.0.0",
+    "numpy>=1.24.0",
+]
+
+[project.scripts]
+dayz-texture-tool = "dayz_texture_tool.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
