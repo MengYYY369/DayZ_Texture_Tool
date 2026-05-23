@@ -20,7 +20,7 @@ from dayz_texture_tool.batch import collect_image_files, process_game2pbr_auto, 
 from dayz_texture_tool.models import BatchResult
 from dayz_texture_tool.processors.game2pbr import GAME2PBR_PROCESSORS
 from dayz_texture_tool.processors.pbr2dayz import IMAGE_EXTENSIONS, convert_pbr_folder
-from dayz_texture_tool.settings import load_settings, save_settings
+from dayz_texture_tool.settings import DEFAULT_GAME_OUTPUT_SUFFIXES, DEFAULT_PBR_OUTPUT_SUFFIXES, load_settings, save_settings
 from dayz_texture_tool.ui.i18n import text
 
 
@@ -37,6 +37,8 @@ GAME_PROCESSORS = [
 ]
 
 PBR_TYPES = ["basecolor", "normal", "roughness", "metallic", "ao"]
+PBR_OUTPUT_TYPES = ["co", "nohq", "smdi", "as"]
+PBR_PREFIX_MODES = ["auto", "current_folder", "parent_folder", "custom"]
 
 
 class DnDCTk(ctk.CTk):
@@ -60,14 +62,18 @@ class DayZTextureToolApp(DnDCTk):
         self.pbr_folder: Path | None = None
         self.widgets: dict[str, object] = {}
         self.pages: dict[str, ctk.CTkFrame] = {}
+        self.game_output_entries: dict[str, ctk.CTkEntry] = {}
         self.current_page = "game"
         self.title(text(self.language, "title"))
         self.geometry("1180x780")
         self.minsize(1040, 700)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build()
         self._apply_language()
         self._load_game_suffix()
+        self._render_game_output_suffixes()
         self._load_pbr_suffixes()
+        self._load_pbr_naming()
         self._update_status_labels()
 
     def _build(self) -> None:
@@ -132,17 +138,20 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["game_suffix_hint"] = ctk.CTkLabel(suffix, text_color="gray55")
         self.widgets["game_suffix_hint"].grid(row=0, column=4, padx=14, pady=14, sticky="e")
 
+        self.widgets["game_output_suffixes"] = ctk.CTkFrame(self.game_tab)
+        self.widgets["game_output_suffixes"].grid(row=2, column=0, columnspan=2, padx=14, pady=8, sticky="ew")
+
         self.widgets["game_drop"] = self._drop_area(self.game_tab, self._on_game_drop, "drop_files", "drop_files_hint")
-        self.widgets["game_drop"].grid(row=2, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
+        self.widgets["game_drop"].grid(row=3, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
         self.widgets["game_pending"] = self._pending_panel(self.game_tab)
-        self.widgets["game_pending"].grid(row=2, column=1, padx=(8, 14), pady=8, sticky="nsew")
+        self.widgets["game_pending"].grid(row=3, column=1, padx=(8, 14), pady=(8, 2), sticky="nsew")
         self.widgets["game_start_button"] = ctk.CTkButton(self.game_tab, width=188, height=56, font=ctk.CTkFont(size=16, weight="bold"), command=self._start_game2pbr)
-        self.widgets["game_start_button"].grid(row=3, column=1, padx=(8, 14), pady=(8, 8), sticky="se")
+        self.widgets["game_start_button"].grid(row=4, column=1, padx=(8, 14), pady=(2, 8), sticky="se")
         self.widgets["game_status"] = ctk.CTkLabel(self.game_tab, text_color="gray55", anchor="w")
-        self.widgets["game_status"].grid(row=4, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
+        self.widgets["game_status"].grid(row=5, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
         self.widgets["game_progress"] = ctk.CTkProgressBar(self.game_tab, mode="determinate")
         self.widgets["game_progress"].set(0)
-        self.widgets["game_progress"].grid(row=4, column=1, padx=(8, 18), pady=(4, 14), sticky="ew")
+        self.widgets["game_progress"].grid(row=5, column=1, padx=(8, 18), pady=(4, 14), sticky="ew")
 
     def _build_pbr_tab(self) -> None:
         self.pbr_tab.grid_columnconfigure(0, weight=7)
@@ -182,17 +191,36 @@ class DayZTextureToolApp(DnDCTk):
             self.widgets[f"pbr_{pbr_type}_label"] = label
             self.widgets[f"pbr_{pbr_type}"] = entry
 
+        pbr_naming = ctk.CTkFrame(self.pbr_tab)
+        pbr_naming.grid(row=2, column=0, columnspan=2, padx=14, pady=8, sticky="ew")
+        for index, output_type in enumerate(PBR_OUTPUT_TYPES):
+            pbr_naming.grid_columnconfigure(index, weight=1)
+            label = ctk.CTkLabel(pbr_naming)
+            label.grid(row=0, column=index, padx=8, pady=(12, 2), sticky="w")
+            entry = ctk.CTkEntry(pbr_naming)
+            entry.grid(row=1, column=index, padx=8, pady=(2, 12), sticky="ew")
+            self.widgets[f"pbr_output_{output_type}_label"] = label
+            self.widgets[f"pbr_output_{output_type}"] = entry
+        self.widgets["pbr_prefix_label"] = ctk.CTkLabel(pbr_naming)
+        self.widgets["pbr_prefix_label"].grid(row=0, column=4, padx=8, pady=(12, 2), sticky="w")
+        self.widgets["pbr_prefix_mode"] = ctk.CTkOptionMenu(pbr_naming, values=[], command=self._on_pbr_prefix_mode_change)
+        self.widgets["pbr_prefix_mode"].grid(row=1, column=4, padx=8, pady=(2, 12), sticky="ew")
+        self.widgets["pbr_custom_prefix"] = ctk.CTkEntry(pbr_naming)
+        self.widgets["pbr_custom_prefix"].grid(row=1, column=5, padx=8, pady=(2, 12), sticky="ew")
+        pbr_naming.grid_columnconfigure(4, weight=1)
+        pbr_naming.grid_columnconfigure(5, weight=1)
+
         self.widgets["pbr_drop"] = self._drop_area(self.pbr_tab, self._on_pbr_drop, "drop_folder", "drop_folder_hint")
-        self.widgets["pbr_drop"].grid(row=2, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
+        self.widgets["pbr_drop"].grid(row=3, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
         self.widgets["pbr_pending"] = self._pending_panel(self.pbr_tab)
-        self.widgets["pbr_pending"].grid(row=2, column=1, padx=(8, 14), pady=8, sticky="nsew")
+        self.widgets["pbr_pending"].grid(row=3, column=1, padx=(8, 14), pady=(8, 2), sticky="nsew")
         self.widgets["pbr_start_button"] = ctk.CTkButton(self.pbr_tab, width=188, height=56, font=ctk.CTkFont(size=16, weight="bold"), command=self._start_pbr2dayz)
-        self.widgets["pbr_start_button"].grid(row=3, column=1, padx=(8, 14), pady=(8, 8), sticky="se")
+        self.widgets["pbr_start_button"].grid(row=4, column=1, padx=(8, 14), pady=(2, 8), sticky="se")
         self.widgets["pbr_status"] = ctk.CTkLabel(self.pbr_tab, text_color="gray55", anchor="w")
-        self.widgets["pbr_status"].grid(row=4, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
+        self.widgets["pbr_status"].grid(row=5, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
         self.widgets["pbr_progress"] = ctk.CTkProgressBar(self.pbr_tab, mode="determinate")
         self.widgets["pbr_progress"].set(0)
-        self.widgets["pbr_progress"].grid(row=4, column=1, padx=(8, 18), pady=(4, 14), sticky="ew")
+        self.widgets["pbr_progress"].grid(row=5, column=1, padx=(8, 18), pady=(4, 14), sticky="ew")
 
     def _build_settings_tab(self) -> None:
         self.settings_tab.grid_columnconfigure(1, weight=1)
@@ -260,7 +288,9 @@ class DayZTextureToolApp(DnDCTk):
 
     def _toggle_language(self) -> None:
         self._save_current_game_suffix()
+        self._save_current_game_output_suffixes()
         self._save_pbr_suffixes()
+        self._save_pbr_naming()
         self.language = "en" if self.language == "zh" else "zh"
         self.settings.language = self.language
         save_settings(self.settings)
@@ -290,12 +320,18 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["pbr_start_button"].configure(text=text(self.language, "start"))
         self.widgets["pbr_match_mode"].configure(values=[text(self.language, "match_exact"), text(self.language, "match_fuzzy")])
         self.widgets["pbr_match_mode"].set(text(self.language, f"match_{self.settings.pbr_match_mode}"))
+        for output_type in PBR_OUTPUT_TYPES:
+            self.widgets[f"pbr_output_{output_type}_label"].configure(text=text(self.language, f"pbr_output_{output_type}"))
+        self.widgets["pbr_prefix_label"].configure(text=text(self.language, "pbr_prefix_mode"))
+        self.widgets["pbr_prefix_mode"].configure(values=[text(self.language, f"prefix_{mode}") for mode in PBR_PREFIX_MODES])
+        self.widgets["pbr_prefix_mode"].set(text(self.language, f"prefix_{self.settings.pbr_prefix_mode}"))
         self.widgets["paa_label"].configure(text=text(self.language, "image_to_paa"))
         self.widgets["paa_browse"].configure(text=text(self.language, "browse"))
         self.widgets["settings_save"].configure(text=text(self.language, "save"))
         for pbr_type in PBR_TYPES:
             self.widgets[f"pbr_{pbr_type}_label"].configure(text=text(self.language, f"pbr_suffix_{pbr_type}"))
         self._refresh_mode_menu()
+        self._render_game_output_suffixes()
         self._apply_drop_text("game_drop")
         self._apply_drop_text("pbr_drop")
         self._render_pending("game_pending", self._game_pending_paths())
@@ -312,6 +348,12 @@ class DayZTextureToolApp(DnDCTk):
             return "fuzzy"
         return "exact"
 
+    def _prefix_mode_value(self, display_value: str) -> str:
+        for mode in PBR_PREFIX_MODES:
+            if display_value == text(self.language, f"prefix_{mode}"):
+                return mode
+        return "auto"
+
     def _parse_suffix_text(self, value: str) -> list[str]:
         parts = value.replace(";", ",").replace(" ", ",").split(",")
         return [part.strip().lower() for part in parts if part.strip()]
@@ -324,10 +366,31 @@ class DayZTextureToolApp(DnDCTk):
             return
         self.settings.game_suffixes[self.selected_game_processor] = self._parse_suffix_text(self.widgets["game_suffix"].get())
 
+    def _save_current_game_output_suffixes(self) -> None:
+        if not self.game_output_entries:
+            return
+        self.settings.game_output_suffixes[self.selected_game_processor] = {key: entry.get() for key, entry in self.game_output_entries.items()}
+
     def _load_game_suffix(self) -> None:
         suffixes = self.settings.game_suffixes.get(self.selected_game_processor, [])
         self.widgets["game_suffix"].delete(0, "end")
         self.widgets["game_suffix"].insert(0, self._format_suffixes(suffixes))
+
+    def _render_game_output_suffixes(self) -> None:
+        frame = self.widgets["game_output_suffixes"]
+        for child in frame.winfo_children():
+            child.destroy()
+        self.game_output_entries = {}
+        suffixes = self.settings.game_output_suffixes.get(self.selected_game_processor, DEFAULT_GAME_OUTPUT_SUFFIXES.get(self.selected_game_processor, {}))
+        ctk.CTkLabel(frame, text=text(self.language, "output_suffixes")).grid(row=0, column=0, padx=14, pady=14, sticky="w")
+        for index, key in enumerate(suffixes, start=1):
+            frame.grid_columnconfigure(index, weight=1)
+            label = ctk.CTkLabel(frame, text=text(self.language, f"output_key_{key}"))
+            label.grid(row=0, column=index, padx=6, pady=(8, 0), sticky="w")
+            entry = ctk.CTkEntry(frame)
+            entry.insert(0, suffixes[key])
+            entry.grid(row=1, column=index, padx=6, pady=(0, 10), sticky="ew")
+            self.game_output_entries[key] = entry
 
     def _load_pbr_suffixes(self) -> None:
         for pbr_type in PBR_TYPES:
@@ -335,16 +398,34 @@ class DayZTextureToolApp(DnDCTk):
             entry.delete(0, "end")
             entry.insert(0, self._format_suffixes(self.settings.pbr_suffixes.get(pbr_type, [])))
 
+    def _load_pbr_naming(self) -> None:
+        for output_type in PBR_OUTPUT_TYPES:
+            entry = self.widgets[f"pbr_output_{output_type}"]
+            entry.delete(0, "end")
+            entry.insert(0, self.settings.pbr_output_suffixes.get(output_type, DEFAULT_PBR_OUTPUT_SUFFIXES[output_type]))
+        self.widgets["pbr_custom_prefix"].delete(0, "end")
+        self.widgets["pbr_custom_prefix"].insert(0, self.settings.pbr_custom_prefix)
+
     def _save_pbr_suffixes(self) -> None:
         if "pbr_basecolor" not in self.widgets:
             return
         for pbr_type in PBR_TYPES:
             self.settings.pbr_suffixes[pbr_type] = self._parse_suffix_text(self.widgets[f"pbr_{pbr_type}"].get())
 
+    def _save_pbr_naming(self) -> None:
+        if "pbr_output_co" not in self.widgets:
+            return
+        for output_type in PBR_OUTPUT_TYPES:
+            self.settings.pbr_output_suffixes[output_type] = self.widgets[f"pbr_output_{output_type}"].get()
+        self.settings.pbr_prefix_mode = self._prefix_mode_value(self.widgets["pbr_prefix_mode"].get())
+        self.settings.pbr_custom_prefix = self.widgets["pbr_custom_prefix"].get()
+
     def _on_game_mode_change(self, display_value: str) -> None:
         self._save_current_game_suffix()
+        self._save_current_game_output_suffixes()
         self.selected_game_processor = self.mode_display_to_id.get(display_value, self.selected_game_processor)
         self._load_game_suffix()
+        self._render_game_output_suffixes()
         save_settings(self.settings)
 
     def _on_game_match_mode_change(self, display_value: str) -> None:
@@ -353,6 +434,10 @@ class DayZTextureToolApp(DnDCTk):
 
     def _on_pbr_match_mode_change(self, display_value: str) -> None:
         self.settings.pbr_match_mode = self._mode_value(display_value)
+        save_settings(self.settings)
+
+    def _on_pbr_prefix_mode_change(self, display_value: str) -> None:
+        self.settings.pbr_prefix_mode = self._prefix_mode_value(display_value)
         save_settings(self.settings)
 
     def _game_pending_paths(self) -> list[Path]:
@@ -386,7 +471,7 @@ class DayZTextureToolApp(DnDCTk):
         pbr_status = text(self.language, "selected_folder").format(path=self.pbr_folder) if self.pbr_folder is not None else text(self.language, "status_ready")
         self.widgets["game_status"].configure(text=game_status)
         self.widgets["pbr_status"].configure(text=pbr_status)
-        self.widgets["settings_status"].configure(text=text(self.language, "settings_ready"))
+        self.widgets["settings_status"].configure(text="")
 
     def _select_game_files(self) -> None:
         files = filedialog.askopenfilenames(filetypes=[("Images", "*.png *.tga *.tif *.tiff *.jpg *.jpeg *.bmp *.dds")])
@@ -418,11 +503,23 @@ class DayZTextureToolApp(DnDCTk):
 
     def _save_settings(self) -> None:
         self._save_current_game_suffix()
+        self._save_current_game_output_suffixes()
         self._save_pbr_suffixes()
+        self._save_pbr_naming()
         self.settings.image_to_paa = self.widgets["paa_path"].get()
         self.settings.language = self.language
         save_settings(self.settings)
         self.widgets["settings_status"].configure(text=text(self.language, "saved"))
+
+    def _on_close(self) -> None:
+        self._save_current_game_suffix()
+        self._save_current_game_output_suffixes()
+        self._save_pbr_suffixes()
+        self._save_pbr_naming()
+        self.settings.image_to_paa = self.widgets["paa_path"].get()
+        self.settings.language = self.language
+        save_settings(self.settings)
+        self.destroy()
 
     def _on_game_drop(self, event) -> None:
         paths = [Path(item) for item in self.tk.splitlist(event.data)]
@@ -450,19 +547,31 @@ class DayZTextureToolApp(DnDCTk):
             self.widgets["game_status"].configure(text=text(self.language, "no_input"))
             return
         self._save_current_game_suffix()
+        self._save_current_game_output_suffixes()
+        error = self._suffix_error(self.settings.game_output_suffixes.get(self.selected_game_processor, {}))
+        if error:
+            self.widgets["game_status"].configure(text=error)
+            return
         save_settings(self.settings)
         self._start_progress("game_progress")
         delete_source = bool(self.widgets["game_delete_source"].get())
+        progress_callback = self._progress_callback("game_progress")
         if self.game2pbr_folder is not None:
-            self._run_async(lambda: process_game2pbr_auto(self.game2pbr_folder, self.settings.game_suffixes, self.settings.game_match_mode, delete_source), "game_status", "game_progress")
+            self._run_async(lambda: process_game2pbr_auto(self.game2pbr_folder, self.settings.game_suffixes, self.settings.game_match_mode, delete_source, self.settings.game_output_suffixes, progress_callback), "game_status", "game_progress")
             return
-        self._run_async(lambda: process_game2pbr_files(self.game2pbr_files, self.selected_game_processor, delete_source), "game_status", "game_progress")
+        output_suffixes = self.settings.game_output_suffixes.get(self.selected_game_processor, {})
+        self._run_async(lambda: process_game2pbr_files(self.game2pbr_files, self.selected_game_processor, delete_source, output_suffixes, progress_callback), "game_status", "game_progress")
 
     def _start_pbr2dayz(self) -> None:
         if self.pbr_folder is None:
             self.widgets["pbr_status"].configure(text=text(self.language, "no_input"))
             return
         self._save_pbr_suffixes()
+        self._save_pbr_naming()
+        error = self._suffix_error(self.settings.pbr_output_suffixes)
+        if error:
+            self.widgets["pbr_status"].configure(text=error)
+            return
         self.settings.image_to_paa = self.widgets["paa_path"].get()
         save_settings(self.settings)
         normal_type = self.widgets["normal_type"].get()
@@ -471,18 +580,35 @@ class DayZTextureToolApp(DnDCTk):
         delete_source = bool(self.widgets["pbr_delete_source"].get())
         image_to_paa = self.settings.image_to_paa
         self._start_progress("pbr_progress")
-        self._run_async(lambda: convert_pbr_folder(self.pbr_folder, normal_type=normal_type, resolution=resolution, make_paa=make_paa, image_to_paa=image_to_paa, patterns=self.settings.pbr_suffixes, match_mode=self.settings.pbr_match_mode, delete_source=delete_source), "pbr_status", "pbr_progress")
+        progress_callback = self._progress_callback("pbr_progress")
+        self._run_async(lambda: convert_pbr_folder(self.pbr_folder, normal_type=normal_type, resolution=resolution, make_paa=make_paa, image_to_paa=image_to_paa, patterns=self.settings.pbr_suffixes, match_mode=self.settings.pbr_match_mode, delete_source=delete_source, output_suffixes=self.settings.pbr_output_suffixes, prefix_mode=self.settings.pbr_prefix_mode, custom_prefix=self.settings.pbr_custom_prefix, progress_callback=progress_callback), "pbr_status", "pbr_progress")
+
+    def _suffix_error(self, suffixes: dict[str, str]) -> str:
+        values = list(suffixes.values())
+        if any("." in value for value in values):
+            return text(self.language, "suffix_no_extension")
+        if len(values) != len(set(values)):
+            return text(self.language, "suffix_conflict")
+        return ""
 
     def _start_progress(self, progress_key: str) -> None:
         progress = self.widgets[progress_key]
-        progress.configure(mode="indeterminate")
-        progress.start()
+        progress.configure(mode="determinate")
+        progress.set(0)
 
     def _stop_progress(self, progress_key: str, value: float) -> None:
         progress = self.widgets[progress_key]
-        progress.stop()
         progress.configure(mode="determinate")
         progress.set(value)
+
+    def _progress_callback(self, progress_key: str):
+        def callback(done: int, total: int, label: str) -> None:
+            self.after(0, lambda done=done, total=total: self._set_progress(progress_key, done, total))
+        return callback
+
+    def _set_progress(self, progress_key: str, done: int, total: int) -> None:
+        value = 0 if total <= 0 else done / total
+        self.widgets[progress_key].set(value)
 
     def _run_async(self, work, status_key: str, progress_key: str) -> None:
         def runner():
@@ -495,7 +621,7 @@ class DayZTextureToolApp(DnDCTk):
         threading.Thread(target=runner, daemon=True).start()
 
     def _show_result(self, status_key: str, progress_key: str, result: BatchResult) -> None:
-        self._stop_progress(progress_key, 1.0 if result.success else 0.0)
+        self._stop_progress(progress_key, 1.0 if result.total else 0.0)
         message = text(self.language, "done").format(ok=result.succeeded, fail=result.failed, skip=result.skipped)
         outputs = len(result.outputs)
         if outputs:

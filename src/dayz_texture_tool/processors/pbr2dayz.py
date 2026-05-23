@@ -5,6 +5,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 from PIL import Image
@@ -20,6 +21,13 @@ DEFAULT_PATTERNS = {
     "roughness": ["roughness", "rough", "_r", "_mg_orn_rou", "_sg_orn_rou", "_orn_rou", "_rou"],
     "metallic": ["metallic", "metal", "_m", "_sg_bm_alpha", "_mg_bm_alpha", "_bm_alpha", "_alpha", "_b", "_mg_b", "_sg_b"],
     "ao": ["ao", "ambient", "occlusion", "_ao", "_occ", "_mg_orn_ao", "_sg_orn_ao", "_orn_ao"],
+}
+
+DEFAULT_OUTPUT_SUFFIXES = {
+    "co": "_co",
+    "nohq": "_nohq",
+    "smdi": "_smdi",
+    "as": "_as",
 }
 
 
@@ -53,14 +61,20 @@ def detect_texture_type(filename: str, patterns: dict[str, list[str]] | None = N
     return None
 
 
-def _output_prefix(directory: Path, root: Path) -> str:
+def _output_prefix(directory: Path, root: Path, prefix_mode: str = "auto", custom_prefix: str = "") -> str:
+    if prefix_mode == "custom" and custom_prefix.strip():
+        return custom_prefix.strip()
+    if prefix_mode == "current_folder":
+        return directory.name
+    if prefix_mode == "parent_folder" and directory.parent != directory:
+        return directory.parent.name
     if directory.name.lower() == "data" and directory.parent != directory:
         return directory.parent.name
     rel_dir = directory.relative_to(root)
     return root.name if str(rel_dir) == "." else directory.name
 
 
-def scan_pbr_groups(folder: str | Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy") -> list[PBRGroup]:
+def scan_pbr_groups(folder: str | Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
     root = Path(folder)
     groups: dict[Path, PBRGroup] = {}
     for file_path in sorted(root.rglob("*")):
@@ -69,7 +83,7 @@ def scan_pbr_groups(folder: str | Path, patterns: dict[str, list[str]] | None = 
         tex_type = detect_texture_type(file_path.name, patterns, match_mode)
         if tex_type is None:
             continue
-        prefix = _output_prefix(file_path.parent, root)
+        prefix = _output_prefix(file_path.parent, root, prefix_mode, custom_prefix)
         group = groups.setdefault(file_path.parent, PBRGroup(prefix=prefix, directory=file_path.parent, textures={}))
         if tex_type not in group.textures:
             group.textures[tex_type] = file_path
@@ -87,6 +101,15 @@ def _save_tga(image: Image.Image, output: Path, resolution: int) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     image.resize((resolution, resolution), Image.Resampling.LANCZOS).save(output, format="TGA")
     return output
+
+
+def _output_suffixes(output_suffixes: dict[str, str] | None = None) -> dict[str, str]:
+    suffixes = dict(DEFAULT_OUTPUT_SUFFIXES)
+    if output_suffixes:
+        for key, suffix in output_suffixes.items():
+            if key in suffixes:
+                suffixes[key] = str(suffix)
+    return suffixes
 
 
 def convert_co_texture(base_color_path: Path, metal_path: Path | None, output_path: Path, co_mode: str, resolution: int) -> Path:
@@ -155,27 +178,43 @@ def _delete_sources(textures: dict[str, Path]) -> None:
             source.unlink()
 
 
-def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, delete_source: bool = False) -> ProcessingResult:
+def _delete_tga_outputs_with_paa(outputs: list[Path]) -> list[Path]:
+    final_outputs = []
+    for output in outputs:
+        paa_output = output.with_suffix(".paa")
+        if paa_output.exists():
+            if output.exists():
+                output.unlink()
+            final_outputs.append(paa_output)
+        else:
+            final_outputs.append(output)
+    return final_outputs
+
+
+def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, delete_source: bool = False, output_suffixes: dict[str, str] | None = None) -> ProcessingResult:
     start = time.time()
     outputs: list[Path] = []
     messages: list[str] = []
     try:
         textures = group.textures
+        suffixes = _output_suffixes(output_suffixes)
         if "basecolor" in textures:
             res = _resolution(textures["basecolor"], resolution)
-            outputs.append(convert_co_texture(textures["basecolor"], textures.get("metallic"), group.directory / f"{group.prefix}_co.tga", co_mode, res))
+            outputs.append(convert_co_texture(textures["basecolor"], textures.get("metallic"), group.directory / f"{group.prefix}{suffixes['co']}.tga", co_mode, res))
         if "normal" in textures:
             res = _resolution(textures["normal"], resolution)
-            outputs.append(convert_nohq_texture(textures["normal"], group.directory / f"{group.prefix}_nohq.tga", normal_type, res))
+            outputs.append(convert_nohq_texture(textures["normal"], group.directory / f"{group.prefix}{suffixes['nohq']}.tga", normal_type, res))
         if "roughness" in textures:
             res = _resolution(textures["roughness"], resolution)
-            outputs.append(convert_smdi_texture(textures.get("metallic"), textures["roughness"], group.directory / f"{group.prefix}_smdi.tga", specular, glossiness, res))
+            outputs.append(convert_smdi_texture(textures.get("metallic"), textures["roughness"], group.directory / f"{group.prefix}{suffixes['smdi']}.tga", specular, glossiness, res))
         if "ao" in textures:
             res = _resolution(textures["ao"], resolution)
-            outputs.append(convert_as_texture(textures["ao"], group.directory / f"{group.prefix}_as.tga", res))
+            outputs.append(convert_as_texture(textures["ao"], group.directory / f"{group.prefix}{suffixes['as']}.tga", res))
         if make_paa and outputs:
             paa_path = Path(image_to_paa) if image_to_paa else None
             _run_image_to_paa(outputs, paa_path, messages)
+            if delete_source:
+                outputs = _delete_tga_outputs_with_paa(outputs)
         if delete_source and outputs:
             _delete_sources(textures)
         elapsed = int((time.time() - start) * 1000)
@@ -187,12 +226,18 @@ def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution:
         return ProcessingResult(False, processor="PBR2DayZ", elapsed_ms=elapsed, error=f"{type(exc).__name__}: {exc}", messages=messages)
 
 
-def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False) -> BatchResult:
+ProgressCallback = Callable[[int, int, str], None]
+
+
+def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None) -> BatchResult:
     result = BatchResult()
-    groups = scan_pbr_groups(folder, patterns, match_mode)
+    groups = scan_pbr_groups(folder, patterns, match_mode, prefix_mode, custom_prefix)
     result.messages.append(f"Scanned {folder}: found {len(groups)} PBR group(s).")
-    for group in groups:
-        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source))
+    total = len(groups)
+    for index, group in enumerate(groups, start=1):
+        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes))
+        if progress_callback:
+            progress_callback(index, total, group.prefix)
     if not groups:
         result.messages.append("No PBR textures found.")
     return result

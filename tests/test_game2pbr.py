@@ -47,6 +47,16 @@ class Game2PBRTests(unittest.TestCase):
             self.assertEqual(int(red[0, 0, 0]), 10)
             self.assertEqual(int(red[0, 0, 1]), 10)
 
+    def test_split_rgba_accepts_custom_output_suffixes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "tex.png"
+            make_rgba(src)
+
+            result = process_game2pbr(src, "SplitRGBAProcessor", output_suffixes={"r": "_red", "g": "_green", "b": "_blue", "a": "_mask"})
+
+            self.assertTrue(result.success)
+            self.assertEqual([p.name for p in result.outputs], ["tex_red.png", "tex_green.png", "tex_blue.png", "tex_mask.png"])
+
     def test_merge_rgba_uses_matching_a_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "tex.png"
@@ -77,6 +87,16 @@ class Game2PBRTests(unittest.TestCase):
             self.assertEqual(int(normal[0, 0, 0]), 10)
             self.assertEqual(int(normal[0, 0, 1]), 20)
             self.assertEqual(int(normal[0, 0, 2]), 255)
+
+    def test_df_nrm_accepts_custom_output_suffixes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "part_NRM.png"
+            make_rgba(src)
+
+            result = process_game2pbr(src, "DF_NRM", output_suffixes={"metal": "_metx", "roughness": "_roux", "normal": "_normalx"})
+
+            self.assertTrue(result.success)
+            self.assertEqual([p.name for p in result.outputs], ["part_NRM_metx.png", "part_NRM_roux.png", "part_NRM_normalx.png"])
 
     def test_abi_orn_channel_mapping(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -133,6 +153,16 @@ class Game2PBRTests(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertFalse(src.exists())
             self.assertTrue((Path(tmp) / "normal_normal.png").exists())
+
+    def test_xy_normal_accepts_custom_output_suffix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "normal.png"
+            make_rgba(src)
+
+            result = process_game2pbr(src, "XYNormalMapProcessor", output_suffixes={"normal": "_nrm"})
+
+            self.assertTrue(result.success)
+            self.assertEqual([p.name for p in result.outputs], ["normal_nrm.png"])
 
 
 if __name__ == "__main__":

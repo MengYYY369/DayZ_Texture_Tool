@@ -61,6 +61,28 @@ class BatchAndSettingsTests(unittest.TestCase):
             self.assertFalse((root / "b_MaterialPack.png").exists())
             self.assertTrue((root / "b_MaterialPack_met.png").exists())
 
+    def test_auto_game2pbr_uses_input_suffixes_and_custom_output_suffixes_separately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_rgba(root / "a_NormalPacked.png")
+
+            result = process_game2pbr_auto(root, suffix_map={"DF_NRM": ["_normalpacked"]}, output_suffix_map={"DF_NRM": {"normal": "_normalx"}})
+
+            self.assertEqual(result.total, 1)
+            self.assertEqual(result.succeeded, 1)
+            self.assertTrue((root / "a_NormalPacked_normalx.png").exists())
+
+    def test_game2pbr_progress_callback_reports_each_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_rgba(root / "a_NRM.png")
+            make_rgba(root / "b_unknown.png")
+            events = []
+
+            process_game2pbr_auto(root, progress_callback=lambda done, total, label: events.append((done, total, label)))
+
+            self.assertEqual([(done, total) for done, total, _ in events], [(1, 2), (2, 2)])
+
     def test_auto_game2pbr_fuzzy_match_finds_embedded_suffix_text(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -75,6 +97,36 @@ class BatchAndSettingsTests(unittest.TestCase):
             self.assertFalse(source.exists())
             self.assertTrue((root / "T_VMGen_MRAMap_440cebeff58d4ce0cf503201272199da_met.png").exists())
 
+    def test_auto_game2pbr_skips_generated_df_mra_outputs_on_next_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for suffix in ["_met", "_rou", "_ao"]:
+                make_rgba(root / f"T_VMGen_MRAMap_440cebeff58d4ce0cf503201272199da{suffix}.png")
+
+            result = process_game2pbr_auto(root, suffix_map={"DF_MRA": ["mramap"]}, match_mode="fuzzy")
+
+            self.assertEqual(result.total, 3)
+            self.assertEqual(result.succeeded, 0)
+            self.assertEqual(result.skipped, 3)
+            self.assertFalse((root / "T_VMGen_MRAMap_440cebeff58d4ce0cf503201272199da_ao_ao.png").exists())
+            self.assertFalse((root / "T_VMGen_MRAMap_440cebeff58d4ce0cf503201272199da_met_rou.png").exists())
+
+    def test_auto_game2pbr_skips_generated_outputs_with_custom_output_suffixes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_rgba(root / "a_NormalPacked_normalx.png")
+
+            result = process_game2pbr_auto(
+                root,
+                suffix_map={"DF_NRM": ["normalpacked"]},
+                match_mode="fuzzy",
+                output_suffix_map={"DF_NRM": {"normal": "_normalx"}},
+            )
+
+            self.assertEqual(result.succeeded, 0)
+            self.assertEqual(result.skipped, 1)
+            self.assertFalse((root / "a_NormalPacked_normalx_normalx.png").exists())
+
     def test_settings_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "settings.json"
@@ -82,7 +134,11 @@ class BatchAndSettingsTests(unittest.TestCase):
                 image_to_paa="D:/tools/ImageToPAA.exe",
                 language="en",
                 game_suffixes={"DF_MRA": ["_materialpack"]},
+                game_output_suffixes={"DF_NRM": {"normal": "_normalx"}},
                 pbr_suffixes={"basecolor": ["_bc"], "normal": ["_nrmx"]},
+                pbr_output_suffixes={"co": "_colorx", "nohq": "_normalx"},
+                pbr_prefix_mode="custom",
+                pbr_custom_prefix="MyPrefix",
                 game_match_mode="fuzzy",
                 pbr_match_mode="exact",
             )
@@ -93,8 +149,14 @@ class BatchAndSettingsTests(unittest.TestCase):
             self.assertEqual(loaded.image_to_paa, "D:/tools/ImageToPAA.exe")
             self.assertEqual(loaded.language, "en")
             self.assertEqual(loaded.game_suffixes["DF_MRA"], ["_materialpack"])
+            self.assertEqual(loaded.game_output_suffixes["DF_NRM"]["normal"], "_normalx")
             self.assertEqual(loaded.pbr_suffixes["basecolor"], ["_bc"])
             self.assertEqual(loaded.pbr_suffixes["normal"], ["_nrmx"])
+            self.assertEqual(loaded.pbr_output_suffixes["co"], "_colorx")
+            self.assertEqual(loaded.pbr_output_suffixes["nohq"], "_normalx")
+            self.assertEqual(loaded.pbr_output_suffixes["smdi"], "_smdi")
+            self.assertEqual(loaded.pbr_prefix_mode, "custom")
+            self.assertEqual(loaded.pbr_custom_prefix, "MyPrefix")
             self.assertEqual(loaded.game_match_mode, "fuzzy")
             self.assertEqual(loaded.pbr_match_mode, "exact")
 
