@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 
 from dayz_texture_tool.models import ProcessingResult
+from dayz_texture_tool.recycle import move_to_recycle_bin
 
 
 SUPPORTED_EXTENSIONS = {".png", ".tga", ".tif", ".tiff", ".jpg", ".jpeg", ".bmp", ".dds"}
@@ -152,8 +153,6 @@ def df_mra(path: Path, ext: str = ".png", output_suffixes: dict[str, str] | None
     met_path = _save_rgba(_gray(arr[:, :, 0]), _output(path, suffixes["metal"], ext))
     rou_path = _save_rgba(_gray(arr[:, :, 1]), _output(path, suffixes["roughness"], ext))
     ao_path = _save_rgba(_gray(arr[:, :, 2]), _output(path, suffixes["ao"], ext))
-    if path.exists():
-        path.unlink()
     return [met_path, rou_path, ao_path]
 
 
@@ -178,7 +177,7 @@ GAME2PBR_PROCESSORS: dict[str, ProcessorFn] = {
 def _delete_source(path: Path, outputs: list[Path]) -> None:
     output_paths = {output.resolve() for output in outputs}
     if path.exists() and path.resolve() not in output_paths:
-        path.unlink()
+        move_to_recycle_bin(path)
 
 
 def process_game2pbr(input_path: str | Path, processor: str, ext: str = ".png", delete_source: bool = False, output_suffixes: dict[str, str] | None = None) -> ProcessingResult:

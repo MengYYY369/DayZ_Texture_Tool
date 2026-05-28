@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 import time
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ import numpy as np
 from PIL import Image
 
 from dayz_texture_tool.models import BatchResult, ProcessingResult
+from dayz_texture_tool.recycle import move_to_recycle_bin
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".tif", ".tiff"}
@@ -41,7 +43,10 @@ class PBRGroup:
 def _matches_keyword(stem: str, name_lower: str, keyword: str, match_mode: str) -> bool:
     kw = keyword.lower()
     if match_mode == "exact":
-        return stem.endswith(kw)
+        if kw.startswith(("_", "-", ".", " ")):
+            return stem.endswith(kw)
+        pattern = rf"(?<![a-z0-9]){re.escape(kw)}$"
+        return re.search(pattern, stem) is not None
     if kw.startswith("_"):
         return kw in stem
     if len(kw) <= 3:
@@ -51,13 +56,18 @@ def _matches_keyword(stem: str, name_lower: str, keyword: str, match_mode: str) 
 
 
 def detect_texture_type(filename: str, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy") -> str | None:
+    match = detect_texture_match(filename, patterns, match_mode)
+    return match[0] if match else None
+
+
+def detect_texture_match(filename: str, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy") -> tuple[str, str] | None:
     active_patterns = patterns or DEFAULT_PATTERNS
     name_lower = filename.lower()
     stem = Path(filename).stem.lower()
     for tex_type, keywords in active_patterns.items():
         for keyword in keywords:
             if _matches_keyword(stem, name_lower, keyword, match_mode):
-                return tex_type
+                return tex_type, keyword
     return None
 
 
@@ -74,32 +84,75 @@ def _output_prefix(directory: Path, root: Path, prefix_mode: str = "auto", custo
     return root.name if str(rel_dir) == "." else directory.name
 
 
-def scan_pbr_groups(folder: str | Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
-    root = Path(folder)
-    groups: dict[Path, PBRGroup] = {}
-    for file_path in sorted(root.rglob("*")):
+def _filename_prefix(filename: str, keyword: str, match_mode: str) -> str:
+    stem = Path(filename).stem
+    stem_lower = stem.lower()
+    kw = keyword.lower()
+    if match_mode == "exact":
+        if kw.startswith(("_", "-", ".", " ")) and stem_lower.endswith(kw):
+            return stem[:-len(kw)].rstrip("_-. ")
+        match = re.search(rf"(?<![a-z0-9]){re.escape(kw)}$", stem_lower)
+        if match:
+            return stem[:match.start()].rstrip("_-. ")
+        return stem
+    index = stem_lower.rfind(kw)
+    if index > 0:
+        return stem[:index].rstrip("_-. ")
+    return stem
+
+
+def _scan_pbr_paths(paths: list[Path], root: Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
+    groups: dict[tuple[Path, str], PBRGroup] = {}
+    for file_path in sorted(paths):
         if not file_path.is_file() or file_path.suffix.lower() not in IMAGE_EXTENSIONS:
             continue
-        tex_type = detect_texture_type(file_path.name, patterns, match_mode)
-        if tex_type is None:
+        match = detect_texture_match(file_path.name, patterns, match_mode)
+        if match is None:
             continue
+        tex_type, keyword = match
         prefix = _output_prefix(file_path.parent, root, prefix_mode, custom_prefix)
-        group = groups.setdefault(file_path.parent, PBRGroup(prefix=prefix, directory=file_path.parent, textures={}))
+        if prefix_mode == "filename_prefix":
+            prefix = _filename_prefix(file_path.name, keyword, match_mode) or prefix
+        group_key = (file_path.parent, prefix)
+        group = groups.setdefault(group_key, PBRGroup(prefix=prefix, directory=file_path.parent, textures={}))
         if tex_type not in group.textures:
             group.textures[tex_type] = file_path
     return list(groups.values())
 
 
-def _resolution(path: Path, requested: str) -> int:
+def scan_pbr_groups(folder: str | Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
+    root = Path(folder)
+    return _scan_pbr_paths(list(root.rglob("*")), root, patterns, match_mode, prefix_mode, custom_prefix)
+
+
+def _root_context_for_files(files: list[Path], root_context: str | Path | None = None) -> Path:
+    if root_context is not None:
+        root = Path(root_context)
+    elif files:
+        root = Path(os.path.commonpath([str(path.parent) for path in files]))
+    else:
+        root = Path(".")
+    if root.name.lower() == "data" and root.parent != root:
+        return root.parent
+    return root
+
+
+def _resolution(path: Path, requested: str) -> tuple[int, int]:
     if requested != "auto":
-        return int(requested)
+        size = int(requested)
+        return size, size
     with Image.open(path) as image:
-        return min(max(image.size), 2048)
+        width, height = image.size
+        max_side = max(width, height)
+        if max_side <= 2048:
+            return width, height
+        scale = 2048 / max_side
+        return max(1, round(width * scale)), max(1, round(height * scale))
 
 
-def _save_tga(image: Image.Image, output: Path, resolution: int) -> Path:
+def _save_tga(image: Image.Image, output: Path, resolution: tuple[int, int]) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
-    image.resize((resolution, resolution), Image.Resampling.LANCZOS).save(output, format="TGA")
+    image.resize(resolution, Image.Resampling.LANCZOS).save(output, format="TGA")
     return output
 
 
@@ -112,7 +165,7 @@ def _output_suffixes(output_suffixes: dict[str, str] | None = None) -> dict[str,
     return suffixes
 
 
-def convert_co_texture(base_color_path: Path, metal_path: Path | None, output_path: Path, co_mode: str, resolution: int) -> Path:
+def convert_co_texture(base_color_path: Path, metal_path: Path | None, output_path: Path, co_mode: str, resolution: tuple[int, int]) -> Path:
     base_color = Image.open(base_color_path).convert("RGB")
     if co_mode != "specular":
         return _save_tga(base_color, output_path, resolution)
@@ -129,7 +182,7 @@ def convert_co_texture(base_color_path: Path, metal_path: Path | None, output_pa
     return _save_tga(image, output_path, resolution)
 
 
-def convert_nohq_texture(normal_path: Path, output_path: Path, normal_type: str, resolution: int) -> Path:
+def convert_nohq_texture(normal_path: Path, output_path: Path, normal_type: str, resolution: tuple[int, int]) -> Path:
     normal = Image.open(normal_path).convert("RGB")
     if normal_type == "directx":
         r_channel, g_channel, b_channel = normal.split()
@@ -138,7 +191,7 @@ def convert_nohq_texture(normal_path: Path, output_path: Path, normal_type: str,
     return _save_tga(normal, output_path, resolution)
 
 
-def convert_smdi_texture(metal_path: Path | None, roughness_path: Path, output_path: Path, specular: float, glossiness: float, resolution: int) -> Path:
+def convert_smdi_texture(metal_path: Path | None, roughness_path: Path, output_path: Path, specular: float, glossiness: float, resolution: tuple[int, int]) -> Path:
     roughness = Image.open(roughness_path).convert("L")
     if metal_path is None:
         metallic = Image.new("L", roughness.size, 0)
@@ -153,7 +206,7 @@ def convert_smdi_texture(metal_path: Path | None, roughness_path: Path, output_p
     return _save_tga(smdi, output_path, resolution)
 
 
-def convert_as_texture(ao_path: Path, output_path: Path, resolution: int) -> Path:
+def convert_as_texture(ao_path: Path, output_path: Path, resolution: tuple[int, int]) -> Path:
     ao = Image.open(ao_path).convert("L")
     inverted_ao = Image.eval(ao, lambda x: 255 - x)
     black = Image.new("L", ao.size, 0)
@@ -167,7 +220,10 @@ def _run_image_to_paa(outputs: list[Path], image_to_paa: Path | None, messages: 
         messages.append("ImageToPAA.exe path is missing or invalid; PAA conversion skipped.")
         return
     for output in outputs:
-        completed = subprocess.run([str(image_to_paa), str(output)], capture_output=True, text=True, check=False)
+        run_kwargs = {"capture_output": True, "text": True, "check": False}
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            run_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        completed = subprocess.run([str(image_to_paa), str(output)], **run_kwargs)
         if completed.returncode != 0:
             messages.append(f"ImageToPAA failed for {output.name}: {completed.stderr.strip() or completed.stdout.strip()}")
 
@@ -175,7 +231,7 @@ def _run_image_to_paa(outputs: list[Path], image_to_paa: Path | None, messages: 
 def _delete_sources(textures: dict[str, Path]) -> None:
     for source in set(textures.values()):
         if source.exists():
-            source.unlink()
+            move_to_recycle_bin(source)
 
 
 def _delete_tga_outputs_with_paa(outputs: list[Path]) -> list[Path]:
@@ -233,6 +289,22 @@ def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolut
     result = BatchResult()
     groups = scan_pbr_groups(folder, patterns, match_mode, prefix_mode, custom_prefix)
     result.messages.append(f"Scanned {folder}: found {len(groups)} PBR group(s).")
+    total = len(groups)
+    for index, group in enumerate(groups, start=1):
+        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes))
+        if progress_callback:
+            progress_callback(index, total, group.prefix)
+    if not groups:
+        result.messages.append("No PBR textures found.")
+    return result
+
+
+def convert_pbr_files(files: list[str | Path], root_context: str | Path | None = None, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None) -> BatchResult:
+    result = BatchResult()
+    file_paths = [Path(file) for file in files]
+    root = _root_context_for_files(file_paths, root_context)
+    groups = _scan_pbr_paths(file_paths, root, patterns, match_mode, prefix_mode, custom_prefix)
+    result.messages.append(f"Selected {len(file_paths)} PBR file(s): found {len(groups)} PBR group(s).")
     total = len(groups)
     for index, group in enumerate(groups, start=1):
         result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes))

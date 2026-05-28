@@ -7,3 +7,4 @@ build/
 dist/
 release/
 *.egg-info/
+.codegraph/

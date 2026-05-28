@@ -58,7 +58,7 @@ class BatchAndSettingsTests(unittest.TestCase):
             self.assertEqual(result.total, 2)
             self.assertEqual(result.succeeded, 2)
             self.assertTrue((root / "a_NormalPacked_N.png").exists())
-            self.assertFalse((root / "b_MaterialPack.png").exists())
+            self.assertTrue((root / "b_MaterialPack.png").exists())
             self.assertTrue((root / "b_MaterialPack_met.png").exists())
 
     def test_auto_game2pbr_uses_input_suffixes_and_custom_output_suffixes_separately(self):
@@ -94,7 +94,7 @@ class BatchAndSettingsTests(unittest.TestCase):
 
             fuzzy = process_game2pbr_auto(root, suffix_map={"DF_MRA": ["mramap"]}, match_mode="fuzzy")
             self.assertEqual(fuzzy.succeeded, 1)
-            self.assertFalse(source.exists())
+            self.assertTrue(source.exists())
             self.assertTrue((root / "T_VMGen_MRAMap_440cebeff58d4ce0cf503201272199da_met.png").exists())
 
     def test_auto_game2pbr_skips_generated_df_mra_outputs_on_next_run(self):

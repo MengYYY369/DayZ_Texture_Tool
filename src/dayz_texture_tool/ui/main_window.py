@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 import threading
 import traceback
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import BooleanVar, filedialog
 
 try:
     import customtkinter as ctk
@@ -16,10 +17,10 @@ except ImportError:
     DND_FILES = None
     TkinterDnD = None
 
-from dayz_texture_tool.batch import collect_image_files, process_game2pbr_auto, process_game2pbr_files
+from dayz_texture_tool.batch import _matches, collect_image_files, process_game2pbr_files
 from dayz_texture_tool.models import BatchResult
-from dayz_texture_tool.processors.game2pbr import GAME2PBR_PROCESSORS
-from dayz_texture_tool.processors.pbr2dayz import IMAGE_EXTENSIONS, convert_pbr_folder
+from dayz_texture_tool.processors.game2pbr import GAME2PBR_PROCESSORS, SUPPORTED_EXTENSIONS
+from dayz_texture_tool.processors.pbr2dayz import IMAGE_EXTENSIONS, convert_pbr_files
 from dayz_texture_tool.settings import DEFAULT_GAME_OUTPUT_SUFFIXES, DEFAULT_PBR_OUTPUT_SUFFIXES, load_settings, save_settings
 from dayz_texture_tool.ui.i18n import text
 
@@ -38,7 +39,7 @@ GAME_PROCESSORS = [
 
 PBR_TYPES = ["basecolor", "normal", "roughness", "metallic", "ao"]
 PBR_OUTPUT_TYPES = ["co", "nohq", "smdi", "as"]
-PBR_PREFIX_MODES = ["auto", "current_folder", "parent_folder", "custom"]
+PBR_PREFIX_MODES = ["auto", "current_folder", "parent_folder", "filename_prefix", "custom"]
 
 
 class DnDCTk(ctk.CTk):
@@ -46,6 +47,15 @@ class DnDCTk(ctk.CTk):
         super().__init__(*args, **kwargs)
         if TkinterDnD is not None:
             self.TkdndVersion = TkinterDnD._require(self)
+
+
+def _register_drop_target(widget, target, handler) -> None:
+    if hasattr(widget, "drop_target_register") and hasattr(widget, "dnd_bind"):
+        widget.drop_target_register(target)
+        widget.dnd_bind("<<Drop>>", handler)
+    if hasattr(widget, "winfo_children"):
+        for child in widget.winfo_children():
+            _register_drop_target(child, target, handler)
 
 
 class DayZTextureToolApp(DnDCTk):
@@ -59,7 +69,12 @@ class DayZTextureToolApp(DnDCTk):
         self.mode_display_to_id: dict[str, str] = {}
         self.game2pbr_files: list[Path] = []
         self.game2pbr_folder: Path | None = None
+        self.game_pending_paths: list[Path] = []
+        self.game_selected_paths: set[Path] = set()
         self.pbr_folder: Path | None = None
+        self.pbr_root_context: Path | None = None
+        self.pbr_pending_paths: list[Path] = []
+        self.pbr_selected_paths: set[Path] = set()
         self.widgets: dict[str, object] = {}
         self.pages: dict[str, ctk.CTkFrame] = {}
         self.game_output_entries: dict[str, ctk.CTkEntry] = {}
@@ -137,6 +152,8 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["game_delete_source"].grid(row=0, column=3, padx=10, pady=14)
         self.widgets["game_suffix_hint"] = ctk.CTkLabel(suffix, text_color="gray55")
         self.widgets["game_suffix_hint"].grid(row=0, column=4, padx=14, pady=14, sticky="e")
+        self.widgets["game_specific_files_button"] = ctk.CTkButton(suffix, command=self._select_matching_game_suffixes)
+        self.widgets["game_specific_files_button"].grid(row=0, column=5, padx=(0, 14), pady=14)
 
         self.widgets["game_output_suffixes"] = ctk.CTkFrame(self.game_tab)
         self.widgets["game_output_suffixes"].grid(row=2, column=0, columnspan=2, padx=14, pady=8, sticky="ew")
@@ -145,8 +162,16 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["game_drop"].grid(row=3, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
         self.widgets["game_pending"] = self._pending_panel(self.game_tab)
         self.widgets["game_pending"].grid(row=3, column=1, padx=(8, 14), pady=(8, 2), sticky="nsew")
-        self.widgets["game_start_button"] = ctk.CTkButton(self.game_tab, width=188, height=56, font=ctk.CTkFont(size=16, weight="bold"), command=self._start_game2pbr)
-        self.widgets["game_start_button"].grid(row=4, column=1, padx=(8, 14), pady=(2, 8), sticky="se")
+        game_actions = ctk.CTkFrame(self.game_tab, fg_color="transparent")
+        game_actions.grid(row=4, column=1, padx=(8, 14), pady=(2, 8), sticky="sew")
+        for index in range(3):
+            game_actions.grid_columnconfigure(index, weight=1)
+        self.widgets["game_clear_selected_button"] = ctk.CTkButton(game_actions, command=lambda: self._clear_selected_pending("game"))
+        self.widgets["game_clear_selected_button"].grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        self.widgets["game_selected_button"] = ctk.CTkButton(game_actions, command=self._start_game2pbr_selected)
+        self.widgets["game_selected_button"].grid(row=0, column=1, padx=6, sticky="ew")
+        self.widgets["game_start_button"] = ctk.CTkButton(game_actions, command=self._start_game2pbr_all)
+        self.widgets["game_start_button"].grid(row=0, column=2, padx=(6, 0), sticky="ew")
         self.widgets["game_status"] = ctk.CTkLabel(self.game_tab, text_color="gray55", anchor="w")
         self.widgets["game_status"].grid(row=5, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
         self.widgets["game_progress"] = ctk.CTkProgressBar(self.game_tab, mode="determinate")
@@ -176,9 +201,11 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["pbr_delete_source"].grid(row=0, column=5, padx=10, pady=14)
         self.widgets["pbr_folder_button"] = ctk.CTkButton(controls, command=self._select_pbr_folder)
         self.widgets["pbr_folder_button"].grid(row=0, column=6, padx=6, pady=14)
+        self.widgets["pbr_files_button"] = ctk.CTkButton(controls, command=self._select_pbr_files)
+        self.widgets["pbr_files_button"].grid(row=0, column=7, padx=6, pady=14)
         self.widgets["pbr_match_mode"] = ctk.CTkSegmentedButton(controls, values=["exact", "fuzzy"], command=self._on_pbr_match_mode_change)
         self.widgets["pbr_match_mode"].set(self.settings.pbr_match_mode)
-        self.widgets["pbr_match_mode"].grid(row=0, column=7, padx=(6, 14), pady=14)
+        self.widgets["pbr_match_mode"].grid(row=0, column=8, padx=(6, 14), pady=14)
 
         pbr_suffix = ctk.CTkFrame(self.pbr_tab)
         pbr_suffix.grid(row=1, column=0, columnspan=2, padx=14, pady=8, sticky="ew")
@@ -214,8 +241,16 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["pbr_drop"].grid(row=3, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
         self.widgets["pbr_pending"] = self._pending_panel(self.pbr_tab)
         self.widgets["pbr_pending"].grid(row=3, column=1, padx=(8, 14), pady=(8, 2), sticky="nsew")
-        self.widgets["pbr_start_button"] = ctk.CTkButton(self.pbr_tab, width=188, height=56, font=ctk.CTkFont(size=16, weight="bold"), command=self._start_pbr2dayz)
-        self.widgets["pbr_start_button"].grid(row=4, column=1, padx=(8, 14), pady=(2, 8), sticky="se")
+        pbr_actions = ctk.CTkFrame(self.pbr_tab, fg_color="transparent")
+        pbr_actions.grid(row=4, column=1, padx=(8, 14), pady=(2, 8), sticky="sew")
+        for index in range(3):
+            pbr_actions.grid_columnconfigure(index, weight=1)
+        self.widgets["pbr_clear_selected_button"] = ctk.CTkButton(pbr_actions, command=lambda: self._clear_selected_pending("pbr"))
+        self.widgets["pbr_clear_selected_button"].grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        self.widgets["pbr_selected_button"] = ctk.CTkButton(pbr_actions, command=self._start_pbr2dayz_selected)
+        self.widgets["pbr_selected_button"].grid(row=0, column=1, padx=6, sticky="ew")
+        self.widgets["pbr_start_button"] = ctk.CTkButton(pbr_actions, command=self._start_pbr2dayz_all)
+        self.widgets["pbr_start_button"].grid(row=0, column=2, padx=(6, 0), sticky="ew")
         self.widgets["pbr_status"] = ctk.CTkLabel(self.pbr_tab, text_color="gray55", anchor="w")
         self.widgets["pbr_status"].grid(row=5, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
         self.widgets["pbr_progress"] = ctk.CTkProgressBar(self.pbr_tab, mode="determinate")
@@ -252,8 +287,7 @@ class DayZTextureToolApp(DnDCTk):
         frame.title_key = title_key
         frame.hint_key = hint_key
         if DND_FILES is not None:
-            frame.drop_target_register(DND_FILES)
-            frame.dnd_bind("<<Drop>>", handler)
+            _register_drop_target(frame, DND_FILES, handler)
         return frame
 
     def _pending_panel(self, parent):
@@ -306,7 +340,10 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["game_processor_label"].configure(text=text(self.language, "processor"))
         self.widgets["game_files_button"].configure(text=text(self.language, "select_files"))
         self.widgets["game_folder_button"].configure(text=text(self.language, "select_folder"))
-        self.widgets["game_start_button"].configure(text=text(self.language, "start"))
+        self.widgets["game_specific_files_button"].configure(text=text(self.language, "select_specific_images"))
+        self.widgets["game_clear_selected_button"].configure(text=text(self.language, "clear_selected"))
+        self.widgets["game_selected_button"].configure(text=text(self.language, "process_selected"))
+        self.widgets["game_start_button"].configure(text=text(self.language, "process_all"))
         self.widgets["game_suffix_label"].configure(text=text(self.language, "custom_suffix"))
         self.widgets["game_suffix_hint"].configure(text=text(self.language, "suffix_hint_short"))
         self.widgets["game_delete_source"].configure(text=text(self.language, "delete_source"))
@@ -317,7 +354,10 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["make_paa"].configure(text=text(self.language, "make_paa"))
         self.widgets["pbr_delete_source"].configure(text=text(self.language, "delete_source"))
         self.widgets["pbr_folder_button"].configure(text=text(self.language, "select_folder"))
-        self.widgets["pbr_start_button"].configure(text=text(self.language, "start"))
+        self.widgets["pbr_files_button"].configure(text=text(self.language, "select_specific_images"))
+        self.widgets["pbr_clear_selected_button"].configure(text=text(self.language, "clear_selected"))
+        self.widgets["pbr_selected_button"].configure(text=text(self.language, "process_selected"))
+        self.widgets["pbr_start_button"].configure(text=text(self.language, "process_all"))
         self.widgets["pbr_match_mode"].configure(values=[text(self.language, "match_exact"), text(self.language, "match_fuzzy")])
         self.widgets["pbr_match_mode"].set(text(self.language, f"match_{self.settings.pbr_match_mode}"))
         for output_type in PBR_OUTPUT_TYPES:
@@ -440,60 +480,144 @@ class DayZTextureToolApp(DnDCTk):
         self.settings.pbr_prefix_mode = self._prefix_mode_value(display_value)
         save_settings(self.settings)
 
+    def _pending_attr(self, page: str) -> tuple[str, str, str]:
+        return f"{page}_pending_paths", f"{page}_selected_paths", f"{page}_pending"
+
+    def _unique_image_paths(self, paths: list[Path], extensions: set[str]) -> list[Path]:
+        unique = []
+        seen = set()
+        for path in paths:
+            if path.suffix.lower() not in extensions:
+                continue
+            resolved = path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            unique.append(path)
+        return unique
+
+    def _set_pending_paths(self, page: str, paths: list[Path]) -> None:
+        pending_attr, selected_attr, widget_key = self._pending_attr(page)
+        pending = list(paths)
+        setattr(self, pending_attr, pending)
+        setattr(self, selected_attr, set(pending))
+        self._render_pending(widget_key, pending)
+        self._update_status_labels()
+
+    def _pending_paths_for(self, page: str) -> list[Path]:
+        pending_attr, _, _ = self._pending_attr(page)
+        return list(getattr(self, pending_attr))
+
+    def _selected_pending_paths(self, page: str) -> list[Path]:
+        pending_attr, selected_attr, _ = self._pending_attr(page)
+        pending = getattr(self, pending_attr)
+        selected = getattr(self, selected_attr)
+        return [path for path in pending if path in selected]
+
+    def _select_pending_path(self, page: str, path: Path, selected: bool) -> None:
+        _, selected_attr, widget_key = self._pending_attr(page)
+        selected_paths = getattr(self, selected_attr)
+        if selected:
+            selected_paths.add(path)
+        else:
+            selected_paths.discard(path)
+        self._render_pending(widget_key, self._pending_paths_for(page))
+        self._update_status_labels()
+
+    def _set_all_pending(self, page: str, selected: bool) -> None:
+        pending_attr, selected_attr, widget_key = self._pending_attr(page)
+        pending = getattr(self, pending_attr)
+        setattr(self, selected_attr, set(pending) if selected else set())
+        self._render_pending(widget_key, pending)
+        self._update_status_labels()
+
+    def _clear_selected_pending(self, page: str) -> None:
+        pending_attr, selected_attr, widget_key = self._pending_attr(page)
+        pending = getattr(self, pending_attr)
+        selected = getattr(self, selected_attr)
+        remaining = [path for path in pending if path not in selected]
+        setattr(self, pending_attr, remaining)
+        setattr(self, selected_attr, set())
+        self._render_pending(widget_key, remaining)
+        self._update_status_labels()
+
+    def _select_matching_game_suffixes(self) -> None:
+        self._save_current_game_suffix()
+        suffixes = self._parse_suffix_text(self.widgets["game_suffix"].get())
+        match_mode = self.settings.game_match_mode
+        selected = {path for path in self.game_pending_paths if any(_matches(path.stem.lower(), suffix, match_mode) for suffix in suffixes)}
+        self.game_selected_paths = selected
+        self._render_pending("game_pending", self.game_pending_paths)
+        self._update_status_labels()
+
     def _game_pending_paths(self) -> list[Path]:
-        if self.game2pbr_folder is not None:
-            return collect_image_files(self.game2pbr_folder)
-        return list(self.game2pbr_files)
+        return list(self.game_pending_paths)
 
     def _pbr_pending_paths(self) -> list[Path]:
-        if self.pbr_folder is None:
-            return []
-        return sorted(path for path in self.pbr_folder.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS)
+        return list(self.pbr_pending_paths)
 
     def _render_pending(self, key: str, paths: list[Path]) -> None:
         panel = self.widgets[key]
-        panel.configure(label_text=text(self.language, "pending_title").format(count=len(paths)))
+        page = key.split("_", 1)[0]
+        selected = set(self._selected_pending_paths(page))
+        panel.configure(label_text=text(self.language, "pending_title").format(count=len(paths), selected=len(selected)))
         for child in panel.winfo_children():
             child.destroy()
         if not paths:
             ctk.CTkLabel(panel, text=text(self.language, "pending_empty"), text_color="gray55", anchor="w").grid(row=0, column=0, padx=8, pady=8, sticky="ew")
             return
-        for index, path in enumerate(paths):
-            ctk.CTkLabel(panel, text=path.name, anchor="w").grid(row=index, column=0, padx=8, pady=(6, 0), sticky="ew")
+        all_var = BooleanVar(value=len(selected) == len(paths))
+        ctk.CTkCheckBox(panel, text=text(self.language, "select_all"), variable=all_var, command=lambda page=page, var=all_var: self._set_all_pending(page, bool(var.get()))).grid(row=0, column=0, padx=8, pady=(6, 2), sticky="w")
+        for index, path in enumerate(paths, start=1):
+            var = BooleanVar(value=path in selected)
+            ctk.CTkCheckBox(panel, text=path.name, variable=var, command=lambda page=page, path=path, var=var: self._select_pending_path(page, path, bool(var.get()))).grid(row=index, column=0, padx=8, pady=(6, 0), sticky="ew")
 
     def _update_status_labels(self) -> None:
-        if self.game2pbr_folder is not None:
-            game_status = text(self.language, "selected_folder").format(path=self.game2pbr_folder)
-        elif self.game2pbr_files:
-            game_status = text(self.language, "selected_files").format(count=len(self.game2pbr_files))
-        else:
-            game_status = text(self.language, "status_ready")
-        pbr_status = text(self.language, "selected_folder").format(path=self.pbr_folder) if self.pbr_folder is not None else text(self.language, "status_ready")
+        game_total = len(self.game_pending_paths)
+        game_selected = len(self.game_selected_paths)
+        pbr_total = len(self.pbr_pending_paths)
+        pbr_selected = len(self.pbr_selected_paths)
+        game_status = text(self.language, "pending_status").format(total=game_total, selected=game_selected) if game_total else text(self.language, "status_ready")
+        pbr_status = text(self.language, "pending_status").format(total=pbr_total, selected=pbr_selected) if pbr_total else text(self.language, "status_ready")
         self.widgets["game_status"].configure(text=game_status)
         self.widgets["pbr_status"].configure(text=pbr_status)
         self.widgets["settings_status"].configure(text="")
 
     def _select_game_files(self) -> None:
         files = filedialog.askopenfilenames(filetypes=[("Images", "*.png *.tga *.tif *.tiff *.jpg *.jpeg *.bmp *.dds")])
-        self.game2pbr_files = [Path(file) for file in files]
+        self.game2pbr_files = self._unique_image_paths([Path(file) for file in files], SUPPORTED_EXTENSIONS)
         self.game2pbr_folder = None
-        self._render_pending("game_pending", self._game_pending_paths())
-        self._update_status_labels()
+        self._set_pending_paths("game", self.game2pbr_files)
 
     def _select_game_folder(self) -> None:
         folder = filedialog.askdirectory()
         if folder:
             self.game2pbr_folder = Path(folder)
             self.game2pbr_files = []
-            self._render_pending("game_pending", self._game_pending_paths())
-            self._update_status_labels()
+            self._set_pending_paths("game", collect_image_files(self.game2pbr_folder))
 
     def _select_pbr_folder(self) -> None:
         folder = filedialog.askdirectory()
         if folder:
             self.pbr_folder = Path(folder)
-            self._render_pending("pbr_pending", self._pbr_pending_paths())
-            self._update_status_labels()
+            self.pbr_root_context = self.pbr_folder
+            self._set_pending_paths("pbr", sorted(path for path in self.pbr_folder.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS))
+
+    def _select_pbr_files(self) -> None:
+        files = filedialog.askopenfilenames(filetypes=[("Images", "*.png *.tga *.tif *.tiff *.jpg *.jpeg *.bmp *.dds")])
+        selected = self._unique_image_paths([Path(file) for file in files], IMAGE_EXTENSIONS)
+        if selected:
+            self.pbr_folder = selected[0].parent
+            self.pbr_root_context = self._root_context_for_selected_files(selected)
+            self._set_pending_paths("pbr", selected)
+
+    def _root_context_for_selected_files(self, files: list[Path]) -> Path | None:
+        if not files:
+            return None
+        root = Path(os.path.commonpath([str(path.parent) for path in files]))
+        if root.name.lower() == "data" and root.parent != root:
+            return root.parent
+        return root
 
     def _browse_paa(self) -> None:
         path = filedialog.askopenfilename(filetypes=[("ImageToPAA", "ImageToPAA.exe"), ("Executable", "*.exe")])
@@ -524,26 +648,48 @@ class DayZTextureToolApp(DnDCTk):
     def _on_game_drop(self, event) -> None:
         paths = [Path(item) for item in self.tk.splitlist(event.data)]
         folders = [path for path in paths if path.is_dir()]
-        files = [path for path in paths if path.is_file()]
+        files = self._unique_image_paths([path for path in paths if path.is_file()], SUPPORTED_EXTENSIONS)
+        pending = []
         if folders:
             self.game2pbr_folder = folders[0]
             self.game2pbr_files = []
-        elif files:
+            for folder in folders:
+                pending.extend(collect_image_files(folder))
+        if files:
             self.game2pbr_files = files
             self.game2pbr_folder = None
-        self._render_pending("game_pending", self._game_pending_paths())
-        self._update_status_labels()
+            pending.extend(files)
+        if pending:
+            self._set_pending_paths("game", self._unique_image_paths(pending, SUPPORTED_EXTENSIONS))
 
     def _on_pbr_drop(self, event) -> None:
         paths = [Path(item) for item in self.tk.splitlist(event.data)]
         folders = [path for path in paths if path.is_dir()]
+        files = self._unique_image_paths([path for path in paths if path.is_file()], IMAGE_EXTENSIONS)
+        pending = []
         if folders:
             self.pbr_folder = folders[0]
-            self._render_pending("pbr_pending", self._pbr_pending_paths())
-            self._update_status_labels()
+            self.pbr_root_context = folders[0]
+            for folder in folders:
+                pending.extend(sorted(path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS))
+        if files and not folders:
+            self.pbr_folder = files[0].parent
+            self.pbr_root_context = self._root_context_for_selected_files(files)
+        if files:
+            pending.extend(files)
+        if pending:
+            self._set_pending_paths("pbr", self._unique_image_paths(pending, IMAGE_EXTENSIONS))
+
+    def _start_game2pbr_all(self) -> None:
+        self._set_all_pending("game", True)
+        self._start_game2pbr_selected()
 
     def _start_game2pbr(self) -> None:
-        if self.game2pbr_folder is None and not self.game2pbr_files:
+        self._start_game2pbr_selected()
+
+    def _start_game2pbr_selected(self) -> None:
+        selected_paths = self._selected_pending_paths("game")
+        if not selected_paths:
             self.widgets["game_status"].configure(text=text(self.language, "no_input"))
             return
         self._save_current_game_suffix()
@@ -556,14 +702,19 @@ class DayZTextureToolApp(DnDCTk):
         self._start_progress("game_progress")
         delete_source = bool(self.widgets["game_delete_source"].get())
         progress_callback = self._progress_callback("game_progress")
-        if self.game2pbr_folder is not None:
-            self._run_async(lambda: process_game2pbr_auto(self.game2pbr_folder, self.settings.game_suffixes, self.settings.game_match_mode, delete_source, self.settings.game_output_suffixes, progress_callback), "game_status", "game_progress")
-            return
         output_suffixes = self.settings.game_output_suffixes.get(self.selected_game_processor, {})
-        self._run_async(lambda: process_game2pbr_files(self.game2pbr_files, self.selected_game_processor, delete_source, output_suffixes, progress_callback), "game_status", "game_progress")
+        self._run_async(lambda: process_game2pbr_files(selected_paths, self.selected_game_processor, delete_source, output_suffixes, progress_callback), "game_status", "game_progress")
+
+    def _start_pbr2dayz_all(self) -> None:
+        self._set_all_pending("pbr", True)
+        self._start_pbr2dayz_selected()
 
     def _start_pbr2dayz(self) -> None:
-        if self.pbr_folder is None:
+        self._start_pbr2dayz_selected()
+
+    def _start_pbr2dayz_selected(self) -> None:
+        selected_paths = self._selected_pending_paths("pbr")
+        if not selected_paths:
             self.widgets["pbr_status"].configure(text=text(self.language, "no_input"))
             return
         self._save_pbr_suffixes()
@@ -581,7 +732,7 @@ class DayZTextureToolApp(DnDCTk):
         image_to_paa = self.settings.image_to_paa
         self._start_progress("pbr_progress")
         progress_callback = self._progress_callback("pbr_progress")
-        self._run_async(lambda: convert_pbr_folder(self.pbr_folder, normal_type=normal_type, resolution=resolution, make_paa=make_paa, image_to_paa=image_to_paa, patterns=self.settings.pbr_suffixes, match_mode=self.settings.pbr_match_mode, delete_source=delete_source, output_suffixes=self.settings.pbr_output_suffixes, prefix_mode=self.settings.pbr_prefix_mode, custom_prefix=self.settings.pbr_custom_prefix, progress_callback=progress_callback), "pbr_status", "pbr_progress")
+        self._run_async(lambda: convert_pbr_files(selected_paths, root_context=self.pbr_root_context, normal_type=normal_type, resolution=resolution, make_paa=make_paa, image_to_paa=image_to_paa, patterns=self.settings.pbr_suffixes, match_mode=self.settings.pbr_match_mode, delete_source=delete_source, output_suffixes=self.settings.pbr_output_suffixes, prefix_mode=self.settings.pbr_prefix_mode, custom_prefix=self.settings.pbr_custom_prefix, progress_callback=progress_callback), "pbr_status", "pbr_progress")
 
     def _suffix_error(self, suffixes: dict[str, str]) -> str:
         values = list(suffixes.values())

@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
@@ -116,7 +117,7 @@ class Game2PBRTests(unittest.TestCase):
             self.assertEqual(int(normal[0, 0, 1]), 30)
             self.assertEqual(int(normal[0, 0, 2]), 128)
 
-    def test_df_mra_renames_channels_and_deletes_source_and_alpha(self):
+    def test_df_mra_renames_channels_without_deleting_source_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "part_MRA.png"
             make_rgba(src)
@@ -124,8 +125,7 @@ class Game2PBRTests(unittest.TestCase):
             result = process_game2pbr(src, "DF_MRA")
 
             self.assertTrue(result.success)
-            self.assertFalse(src.exists())
-            self.assertFalse((Path(tmp) / "part_MRA_a.png").exists())
+            self.assertTrue(src.exists())
             self.assertEqual([p.name for p in result.outputs], ["part_MRA_met.png", "part_MRA_rou.png", "part_MRA_ao.png"])
             self.assertTrue((Path(tmp) / "part_MRA_met.png").exists())
             self.assertTrue((Path(tmp) / "part_MRA_rou.png").exists())
@@ -143,16 +143,29 @@ class Game2PBRTests(unittest.TestCase):
             self.assertTrue(src.exists())
             self.assertTrue((Path(tmp) / "tex_converted.png").exists())
 
-    def test_xy_normal_can_delete_source_when_requested(self):
+    def test_xy_normal_moves_source_to_recycle_bin_when_requested(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "normal.png"
             make_rgba(src)
 
-            result = process_game2pbr(src, "XYNormalMapProcessor", delete_source=True)
+            with patch("dayz_texture_tool.processors.game2pbr.move_to_recycle_bin") as recycle:
+                result = process_game2pbr(src, "XYNormalMapProcessor", delete_source=True)
 
             self.assertTrue(result.success)
-            self.assertFalse(src.exists())
+            recycle.assert_called_once_with(src)
             self.assertTrue((Path(tmp) / "normal_normal.png").exists())
+
+    def test_df_mra_moves_source_to_recycle_bin_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "part_MRA.png"
+            make_rgba(src)
+
+            with patch("dayz_texture_tool.processors.game2pbr.move_to_recycle_bin") as recycle:
+                result = process_game2pbr(src, "DF_MRA", delete_source=True)
+
+            self.assertTrue(result.success)
+            recycle.assert_called_once_with(src)
+            self.assertEqual([p.name for p in result.outputs], ["part_MRA_met.png", "part_MRA_rou.png", "part_MRA_ao.png"])
 
     def test_xy_normal_accepts_custom_output_suffix(self):
         with tempfile.TemporaryDirectory() as tmp:
