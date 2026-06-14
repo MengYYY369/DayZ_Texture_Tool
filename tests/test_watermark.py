@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from dayz_texture_tool.processors.watermark import add_watermark, detect_watermark
@@ -34,8 +36,8 @@ class WatermarkProcessorTests(unittest.TestCase):
     def test_add_watermark_writes_output_and_reports_bit_length(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            image = root / "source.tga"
-            output = root / "source_watermarked.tga"
+            image = root / "source.png"
+            output = root / "source_watermarked.png"
             image.write_bytes(b"image")
 
             with patch("dayz_texture_tool.processors.watermark.WaterMark", FakeWaterMark):
@@ -86,6 +88,24 @@ class WatermarkProcessorTests(unittest.TestCase):
 
             self.assertTrue(result.success)
             self.assertEqual(result.metadata["watermark_text"], "hidden-text")
+
+    def test_add_watermark_tga_uses_readable_intermediate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "source.tga"
+            Image.new("RGB", (128, 128), (20, 80, 140)).save(image, "TGA")
+
+            result = add_watermark(image, "secret", "7")
+
+            self.assertTrue(result.success, result.error)
+            self.assertEqual(result.outputs, [root / "source_watermarked.tga"])
+            self.assertTrue(result.outputs[0].exists())
+
+            readable = root / "source_watermarked.png"
+            Image.open(result.outputs[0]).save(readable, "PNG")
+            detected = detect_watermark(readable, "7", result.metadata["watermark_length"])
+            self.assertTrue(detected.success, detected.error)
+            self.assertEqual(detected.metadata["watermark_text"], "secret")
 
 
 if __name__ == "__main__":

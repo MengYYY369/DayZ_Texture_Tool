@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import time
+import tempfile
 from pathlib import Path
 from typing import Callable
+
+from PIL import Image
 
 from dayz_texture_tool.models import BatchResult, ProcessingResult
 
@@ -52,6 +55,15 @@ def _watermark_class():
     return WaterMark
 
 
+def _is_tga(path: Path) -> bool:
+    return path.suffix.lower() == ".tga"
+
+
+def _save_as_png(source: Path, output: Path) -> None:
+    with Image.open(source) as image:
+        image.save(output, "PNG")
+
+
 def add_watermark(input_path: str | Path, content: str, password: str | int = 1, output_path: str | Path | None = None) -> ProcessingResult:
     start = time.time()
     path = Path(input_path)
@@ -65,9 +77,21 @@ def add_watermark(input_path: str | Path, content: str, password: str | int = 1,
         output = _output_path(path, output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
         bwm = _watermark_class()(password_img=pwd, password_wm=pwd)
-        bwm.read_img(str(path))
-        bwm.read_wm(content, mode="str")
-        bwm.embed(str(output))
+        if _is_tga(path):
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_root = Path(tmp)
+                readable_input = tmp_root / "input.png"
+                readable_output = tmp_root / "output.png"
+                _save_as_png(path, readable_input)
+                bwm.read_img(str(readable_input))
+                bwm.read_wm(content, mode="str")
+                bwm.embed(str(readable_output))
+                with Image.open(readable_output) as image:
+                    image.save(output, "TGA")
+        else:
+            bwm.read_img(str(path))
+            bwm.read_wm(content, mode="str")
+            bwm.embed(str(output))
         length = len(bwm.wm_bit)
         elapsed = int((time.time() - start) * 1000)
         return ProcessingResult(True, input_path=path, outputs=[output], processor="Watermark", elapsed_ms=elapsed, messages=[f"Watermark embedded in {output.name}; wm_bit length: {length}."], metadata={"watermark_length": length})
@@ -99,7 +123,13 @@ def detect_watermark(input_path: str | Path, password: str | int = 1, watermark_
     try:
         pwd = _password(password)
         bwm = _watermark_class()(password_img=pwd, password_wm=pwd)
-        extracted = bwm.extract(str(path), wm_shape=watermark_length, mode="str")
+        if _is_tga(path):
+            with tempfile.TemporaryDirectory() as tmp:
+                readable_input = Path(tmp) / "input.png"
+                _save_as_png(path, readable_input)
+                extracted = bwm.extract(str(readable_input), wm_shape=watermark_length, mode="str")
+        else:
+            extracted = bwm.extract(str(path), wm_shape=watermark_length, mode="str")
         elapsed = int((time.time() - start) * 1000)
         return ProcessingResult(True, input_path=path, processor="Watermark", elapsed_ms=elapsed, messages=[f"Extracted watermark from {path.name}: {extracted}"], metadata={"watermark_text": extracted})
     except Exception as exc:
