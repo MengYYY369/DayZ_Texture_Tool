@@ -141,6 +141,9 @@ class BatchAndSettingsTests(unittest.TestCase):
                 pbr_custom_prefix="MyPrefix",
                 game_match_mode="fuzzy",
                 pbr_match_mode="exact",
+                watermark_content="secret",
+                watermark_password="9",
+                watermark_length=12,
             )
 
             save_settings(settings, path)
@@ -159,6 +162,9 @@ class BatchAndSettingsTests(unittest.TestCase):
             self.assertEqual(loaded.pbr_custom_prefix, "MyPrefix")
             self.assertEqual(loaded.game_match_mode, "fuzzy")
             self.assertEqual(loaded.pbr_match_mode, "exact")
+            self.assertEqual(loaded.watermark_content, "secret")
+            self.assertEqual(loaded.watermark_password, "9")
+            self.assertEqual(loaded.watermark_length, 12)
 
 
 if __name__ == "__main__":

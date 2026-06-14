@@ -60,6 +60,9 @@ class AppSettings:
     pbr_custom_prefix: str = ""
     game_match_mode: str = "exact"
     pbr_match_mode: str = "fuzzy"
+    watermark_content: str = ""
+    watermark_password: str = "1"
+    watermark_length: int = 0
 
 
 def load_settings(path: str | Path = DEFAULT_SETTINGS_PATH) -> AppSettings:
