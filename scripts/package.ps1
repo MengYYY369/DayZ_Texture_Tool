@@ -12,21 +12,14 @@ $Spec = Join-Path $Root "DayZ_Texture_Tool.spec"
 $DistDir = Join-Path $Root "dist"
 $BuildDir = Join-Path $Root "build"
 $ReleaseDir = Join-Path $Root "release"
+$VenvDir = Join-Path $Root ".venv"
+$VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 $AppName = "DayZ_Texture_Tool"
 $AppDist = Join-Path $DistDir $AppName
 $ReleaseApp = Join-Path $ReleaseDir $AppName
 $ZipPath = Join-Path $ReleaseDir "$AppName.zip"
 
-function Find-Python {
-    if ($Python) {
-        return @($Python)
-    }
-
-    $VenvPython = Join-Path $Root ".venv\Scripts\python.exe"
-    if (Test-Path -LiteralPath $VenvPython) {
-        return @($VenvPython)
-    }
-
+function Find-BasePython {
     $Py = Get-Command py -ErrorAction SilentlyContinue
     if ($Py) {
         return @($Py.Source, "-3")
@@ -38,6 +31,19 @@ function Find-Python {
     }
 
     throw "Python was not found. Install Python 3.10+ or pass -Python <path>."
+}
+
+function Find-Python {
+    if ($Python) {
+        return @($Python)
+    }
+
+    if (!(Test-Path -LiteralPath $VenvPython)) {
+        $BasePython = Find-BasePython
+        Run-Step -Title "Create virtual environment" -Command ($BasePython + @("-m", "venv", $VenvDir))
+    }
+
+    return @($VenvPython)
 }
 
 function Run-Step {
@@ -54,9 +60,17 @@ function Run-Step {
     if ($Command.Count -gt 1) {
         $CmdArgs = $Command[1..($Command.Count - 1)]
     }
-    & $Exe @CmdArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Title failed with exit code $LASTEXITCODE."
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $Exe @CmdArgs
+        $ExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+    if ($ExitCode -ne 0) {
+        throw "$Title failed with exit code $ExitCode."
     }
 }
 
@@ -83,8 +97,11 @@ try {
     Run-Python -Title "Check PyInstaller" -PyArgs @("-m", "PyInstaller", "--version")
 }
 catch {
-    throw "PyInstaller is not installed for this Python. Run: $($script:PythonCmd -join ' ') -m pip install pyinstaller"
+    Run-Python -Title "Install PyInstaller" -PyArgs @("-m", "pip", "install", "pyinstaller")
+    Run-Python -Title "Check PyInstaller" -PyArgs @("-m", "PyInstaller", "--version")
 }
+
+Run-Python -Title "Install current project" -PyArgs @("-m", "pip", "install", "-e", ".")
 
 if (!$SkipTests) {
     Run-Python -Title "Run tests" -PyArgs @("-m", "unittest", "discover", "-s", "tests")
@@ -104,6 +121,7 @@ if (!(Test-Path -LiteralPath $AppDist)) {
     throw "Build output was not found: $AppDist"
 }
 
+Remove-Item -LiteralPath $ReleaseApp -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item -LiteralPath $AppDist -Destination $ReleaseApp -Recurse -Force
 
 if (!$NoZip) {
