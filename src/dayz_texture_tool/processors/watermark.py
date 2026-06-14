@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import tempfile
+import hashlib
 from pathlib import Path
 from typing import Callable
 
@@ -27,8 +28,9 @@ def _password(value: str | int) -> int:
         return 1
     try:
         return int(text)
-    except ValueError as exc:
-        raise ValueError("Watermark password must be an integer.") from exc
+    except ValueError:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return int.from_bytes(digest[:4], "big") or 1
 
 
 def _output_path(path: Path, output_path: str | Path | None = None) -> Path:

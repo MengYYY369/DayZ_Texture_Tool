@@ -58,6 +58,19 @@ class WatermarkProcessorTests(unittest.TestCase):
             self.assertFalse(result.success)
             self.assertIn("Watermark content is empty", result.error)
 
+    def test_add_watermark_accepts_text_password(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "source.png"
+            Image.new("RGB", (128, 128), (40, 90, 160)).save(image, "PNG")
+
+            result = add_watermark(image, "secret", "MengYYY")
+
+            self.assertTrue(result.success, result.error)
+            detected = detect_watermark(result.outputs[0], "MengYYY", result.metadata["watermark_length"])
+            self.assertTrue(detected.success, detected.error)
+            self.assertEqual(detected.metadata["watermark_text"], "secret")
+
     def test_add_watermark_rejects_paa_until_decode_tool_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             image = Path(tmp) / "source.paa"
