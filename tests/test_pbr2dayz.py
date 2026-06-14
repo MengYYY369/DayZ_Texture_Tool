@@ -288,6 +288,31 @@ class PBR2DayZTests(unittest.TestCase):
             self.assertIn("creationflags", kwargs)
             self.assertEqual(kwargs["creationflags"] & subprocess.CREATE_NO_WINDOW, subprocess.CREATE_NO_WINDOW)
 
+    def test_convert_pbr_folder_embeds_watermark_before_paa_conversion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = root / "TestMat_BaseColor.png"
+            save_rgb(base, [100, 90, 80])
+            image_to_paa = root / "ImageToPAA.exe"
+            image_to_paa.write_text("stub", encoding="utf-8")
+            calls = []
+
+            def fake_watermark(path, content, password):
+                calls.append(("watermark", Path(path).name, content, password))
+                return pbr2dayz.ProcessingResult(True, input_path=Path(path), outputs=[Path(path)], processor="Watermark", metadata={"watermark_length": 12})
+
+            def fake_paa(outputs, image_to_paa_path, messages):
+                calls.append(("paa", [Path(output).name for output in outputs]))
+
+            with patch("dayz_texture_tool.processors.pbr2dayz.add_watermark_in_place", fake_watermark):
+                with patch("dayz_texture_tool.processors.pbr2dayz._run_image_to_paa", fake_paa):
+                    result = convert_pbr_folder(root, make_paa=True, image_to_paa=image_to_paa, add_watermark=True, watermark_content="secret", watermark_password="9")
+
+            self.assertTrue(result.success)
+            self.assertEqual(calls[0], ("watermark", f"{root.name}_co.tga", "secret", "9"))
+            self.assertEqual(calls[1], ("paa", [f"{root.name}_co.tga"]))
+            self.assertEqual(result.results[0].metadata["watermark_length"], 12)
+
 
 if __name__ == "__main__":
     unittest.main()

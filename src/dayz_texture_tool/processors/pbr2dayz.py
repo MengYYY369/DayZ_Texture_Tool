@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image
 
 from dayz_texture_tool.models import BatchResult, ProcessingResult
+from dayz_texture_tool.processors.watermark import add_watermark_in_place
 from dayz_texture_tool.recycle import move_to_recycle_bin
 
 
@@ -247,10 +248,23 @@ def _delete_tga_outputs_with_paa(outputs: list[Path]) -> list[Path]:
     return final_outputs
 
 
-def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, delete_source: bool = False, output_suffixes: dict[str, str] | None = None) -> ProcessingResult:
+def _add_watermarks(outputs: list[Path], content: str, password: str | int, messages: list[str]) -> dict[str, object]:
+    metadata: dict[str, object] = {}
+    for output in outputs:
+        result = add_watermark_in_place(output, content, password)
+        messages.extend(result.messages)
+        if not result.success:
+            raise RuntimeError(result.error)
+        if "watermark_length" in result.metadata:
+            metadata["watermark_length"] = result.metadata["watermark_length"]
+    return metadata
+
+
+def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, delete_source: bool = False, output_suffixes: dict[str, str] | None = None, add_watermark: bool = False, watermark_content: str = "", watermark_password: str | int = 1) -> ProcessingResult:
     start = time.time()
     outputs: list[Path] = []
     messages: list[str] = []
+    metadata: dict[str, object] = {}
     try:
         textures = group.textures
         suffixes = _output_suffixes(output_suffixes)
@@ -266,6 +280,8 @@ def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution:
         if "ao" in textures:
             res = _resolution(textures["ao"], resolution)
             outputs.append(convert_as_texture(textures["ao"], group.directory / f"{group.prefix}{suffixes['as']}.tga", res))
+        if add_watermark and outputs:
+            metadata.update(_add_watermarks(outputs, watermark_content, watermark_password, messages))
         if make_paa and outputs:
             paa_path = Path(image_to_paa) if image_to_paa else None
             _run_image_to_paa(outputs, paa_path, messages)
@@ -276,22 +292,22 @@ def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution:
         elapsed = int((time.time() - start) * 1000)
         if not outputs:
             return ProcessingResult(False, processor="PBR2DayZ", elapsed_ms=elapsed, messages=[f"Skipped {group.prefix}: no convertible textures."])
-        return ProcessingResult(True, outputs=outputs, processor="PBR2DayZ", elapsed_ms=elapsed, messages=messages)
+        return ProcessingResult(True, outputs=outputs, processor="PBR2DayZ", elapsed_ms=elapsed, messages=messages, metadata=metadata)
     except Exception as exc:
         elapsed = int((time.time() - start) * 1000)
-        return ProcessingResult(False, processor="PBR2DayZ", elapsed_ms=elapsed, error=f"{type(exc).__name__}: {exc}", messages=messages)
+        return ProcessingResult(False, processor="PBR2DayZ", elapsed_ms=elapsed, error=f"{type(exc).__name__}: {exc}", messages=messages, metadata=metadata)
 
 
 ProgressCallback = Callable[[int, int, str], None]
 
 
-def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None) -> BatchResult:
+def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None, add_watermark: bool = False, watermark_content: str = "", watermark_password: str | int = 1) -> BatchResult:
     result = BatchResult()
     groups = scan_pbr_groups(folder, patterns, match_mode, prefix_mode, custom_prefix)
     result.messages.append(f"Scanned {folder}: found {len(groups)} PBR group(s).")
     total = len(groups)
     for index, group in enumerate(groups, start=1):
-        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes))
+        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes, add_watermark, watermark_content, watermark_password))
         if progress_callback:
             progress_callback(index, total, group.prefix)
     if not groups:
@@ -299,7 +315,7 @@ def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolut
     return result
 
 
-def convert_pbr_files(files: list[str | Path], root_context: str | Path | None = None, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None) -> BatchResult:
+def convert_pbr_files(files: list[str | Path], root_context: str | Path | None = None, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None, add_watermark: bool = False, watermark_content: str = "", watermark_password: str | int = 1) -> BatchResult:
     result = BatchResult()
     file_paths = [Path(file) for file in files]
     root = _root_context_for_files(file_paths, root_context)
@@ -307,7 +323,7 @@ def convert_pbr_files(files: list[str | Path], root_context: str | Path | None =
     result.messages.append(f"Selected {len(file_paths)} PBR file(s): found {len(groups)} PBR group(s).")
     total = len(groups)
     for index, group in enumerate(groups, start=1):
-        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes))
+        result.add(convert_pbr_group(group, normal_type, resolution, co_mode, specular, glossiness, make_paa, image_to_paa, delete_source, output_suffixes, add_watermark, watermark_content, watermark_password))
         if progress_callback:
             progress_callback(index, total, group.prefix)
     if not groups:
