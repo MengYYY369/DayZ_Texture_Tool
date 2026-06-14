@@ -277,8 +277,10 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["watermark_length"] = ctk.CTkEntry(controls, width=120)
         self.widgets["watermark_length"].insert(0, str(self.settings.watermark_length))
         self.widgets["watermark_length"].grid(row=0, column=1, padx=8, pady=14, sticky="w")
+        self.widgets["watermark_overwrite"] = ctk.CTkCheckBox(controls)
+        self.widgets["watermark_overwrite"].grid(row=0, column=2, padx=8, pady=14)
         self.widgets["watermark_files_button"] = ctk.CTkButton(controls, command=self._select_watermark_files)
-        self.widgets["watermark_files_button"].grid(row=0, column=2, padx=6, pady=14)
+        self.widgets["watermark_files_button"].grid(row=0, column=3, padx=6, pady=14)
         self.widgets["watermark_drop"] = self._drop_area(self.watermark_tab, self._on_watermark_drop, "drop_watermark_files", "drop_watermark_files_hint")
         self.widgets["watermark_drop"].grid(row=1, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
         self.widgets["watermark_pending"] = self._pending_panel(self.watermark_tab)
@@ -425,6 +427,7 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["paa_browse"].configure(text=text(self.language, "browse"))
         self.widgets["settings_save"].configure(text=text(self.language, "save"))
         self.widgets["watermark_length_label"].configure(text=text(self.language, "watermark_length"))
+        self.widgets["watermark_overwrite"].configure(text=text(self.language, "overwrite_source"))
         self.widgets["watermark_files_button"].configure(text=text(self.language, "select_files"))
         self.widgets["watermark_clear_selected_button"].configure(text=text(self.language, "clear_selected"))
         self.widgets["watermark_add_button"].configure(text=text(self.language, "add_watermark"))
@@ -856,10 +859,12 @@ class DayZTextureToolApp(DnDCTk):
             self.widgets["watermark_status"].configure(text=text(self.language, "no_input"))
             return
         self._save_watermark_settings()
+        self.settings.image_to_paa = self.widgets["paa_path"].get()
         save_settings(self.settings)
         self._start_progress("watermark_progress")
         progress_callback = self._progress_callback("watermark_progress")
-        self._run_async(lambda: add_watermark_files(selected_paths, self.settings.watermark_content, self.settings.watermark_password, progress_callback), "watermark_status", "watermark_progress")
+        overwrite = bool(self.widgets["watermark_overwrite"].get())
+        self._run_async(lambda: add_watermark_files(selected_paths, self.settings.watermark_content, self.settings.watermark_password, progress_callback, image_to_paa=self.settings.image_to_paa, overwrite=overwrite), "watermark_status", "watermark_progress")
 
     def _start_watermark_detect_selected(self) -> None:
         selected_paths = self._selected_pending_paths("watermark")
@@ -867,10 +872,11 @@ class DayZTextureToolApp(DnDCTk):
             self.widgets["watermark_status"].configure(text=text(self.language, "no_input"))
             return
         self._save_watermark_settings()
+        self.settings.image_to_paa = self.widgets["paa_path"].get()
         save_settings(self.settings)
         self._start_progress("watermark_progress")
         progress_callback = self._progress_callback("watermark_progress")
-        self._run_async(lambda: detect_watermark_files(selected_paths, self.settings.watermark_password, self.settings.watermark_length, progress_callback), "watermark_status", "watermark_progress")
+        self._run_async(lambda: detect_watermark_files(selected_paths, self.settings.watermark_password, self.settings.watermark_length, progress_callback, image_to_paa=self.settings.image_to_paa), "watermark_status", "watermark_progress")
 
     def _suffix_error(self, suffixes: dict[str, str]) -> str:
         values = list(suffixes.values())

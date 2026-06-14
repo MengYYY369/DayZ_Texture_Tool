@@ -248,10 +248,10 @@ def _delete_tga_outputs_with_paa(outputs: list[Path]) -> list[Path]:
     return final_outputs
 
 
-def _add_watermarks(outputs: list[Path], content: str, password: str | int, messages: list[str]) -> dict[str, object]:
+def _add_watermarks(outputs: list[Path], content: str, password: str | int, messages: list[str], image_to_paa: str | Path | None = None) -> dict[str, object]:
     metadata: dict[str, object] = {}
     for output in outputs:
-        result = add_watermark_in_place(output, content, password)
+        result = add_watermark_in_place(output, content, password, image_to_paa=image_to_paa)
         messages.extend(result.messages)
         if not result.success:
             raise RuntimeError(result.error)
@@ -281,7 +281,7 @@ def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution:
             res = _resolution(textures["ao"], resolution)
             outputs.append(convert_as_texture(textures["ao"], group.directory / f"{group.prefix}{suffixes['as']}.tga", res))
         if add_watermark and outputs:
-            metadata.update(_add_watermarks(outputs, watermark_content, watermark_password, messages))
+            metadata.update(_add_watermarks(outputs, watermark_content, watermark_password, messages, image_to_paa))
         if make_paa and outputs:
             paa_path = Path(image_to_paa) if image_to_paa else None
             _run_image_to_paa(outputs, paa_path, messages)

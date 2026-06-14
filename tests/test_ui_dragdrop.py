@@ -35,7 +35,7 @@ class DummyApp(main_window.DayZTextureToolApp):
             "pbr_output_suffixes": {},
             "pbr_prefix_mode": "auto",
             "pbr_custom_prefix": "",
-            "image_to_paa": "",
+            "image_to_paa": "D:/tools/ImageToPAA.exe",
             "watermark_content": "secret",
             "watermark_password": "9",
             "watermark_length": 12,
@@ -45,10 +45,11 @@ class DummyApp(main_window.DayZTextureToolApp):
             "game_suffix": type("Widget", (), {"get": lambda self: "_nrm"})(),
             "pbr_delete_source": type("Widget", (), {"get": lambda self: 0})(),
             "pbr_add_watermark": type("Widget", (), {"get": lambda self: 1})(),
+            "watermark_overwrite": type("Widget", (), {"get": lambda self: 1})(),
             "normal_type": type("Widget", (), {"get": lambda self: "directx"})(),
             "resolution": type("Widget", (), {"get": lambda self: "auto"})(),
             "make_paa": type("Widget", (), {"get": lambda self: 0})(),
-            "paa_path": type("Widget", (), {"get": lambda self: ""})(),
+            "paa_path": type("Widget", (), {"get": lambda self: "D:/tools/ImageToPAA.exe"})(),
             "game_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
             "pbr_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
             "watermark_length": type("Widget", (), {"get": lambda self: "12"})(),
@@ -295,6 +296,8 @@ class UIDragDropTests(unittest.TestCase):
             self.assertEqual(process.call_args.args[0], [one])
             self.assertEqual(process.call_args.args[1], "secret")
             self.assertEqual(process.call_args.args[2], "9")
+            self.assertEqual(process.call_args.kwargs["image_to_paa"], "D:/tools/ImageToPAA.exe")
+            self.assertEqual(process.call_args.kwargs["overwrite"], True)
 
 
 if __name__ == "__main__":

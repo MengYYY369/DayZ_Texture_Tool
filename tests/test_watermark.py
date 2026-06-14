@@ -79,7 +79,57 @@ class WatermarkProcessorTests(unittest.TestCase):
             result = add_watermark(image, "secret", "1")
 
             self.assertFalse(result.success)
-            self.assertIn("PAA watermarking requires a PAA decode tool", result.error)
+            self.assertIn("ImageToPAA.exe path is missing", result.error)
+
+    def test_add_watermark_paa_uses_temporary_png_and_converts_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "source.paa"
+            image.write_bytes(b"paa")
+            image_to_paa = root / "ImageToPAA.exe"
+            image_to_paa.write_text("stub", encoding="utf-8")
+            written = []
+
+            def fake_run(command, **kwargs):
+                written.append([Path(part).name for part in command])
+                if len(written) == 1:
+                    Path(command[2]).write_bytes(b"png")
+                else:
+                    Path(command[2]).write_bytes(b"watermarked paa")
+                return type("Completed", (), {"returncode": 0, "stderr": "", "stdout": ""})()
+
+            with patch("dayz_texture_tool.processors.watermark.subprocess.run", fake_run), patch("dayz_texture_tool.processors.watermark.WaterMark", FakeWaterMark):
+                result = add_watermark(image, "secret", "1", image_to_paa=image_to_paa)
+
+            self.assertTrue(result.success, result.error)
+            self.assertEqual(result.outputs, [root / "source_watermarked.paa"])
+            self.assertEqual((root / "source_watermarked.paa").read_bytes(), b"watermarked paa")
+            self.assertEqual(written[0][0], "ImageToPAA.exe")
+            self.assertEqual(written[0][1], "source.paa")
+            self.assertEqual(written[1][0], "ImageToPAA.exe")
+            self.assertEqual(written[1][2], "source_watermarked.paa")
+
+    def test_add_watermark_paa_can_overwrite_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "source.paa"
+            image.write_bytes(b"paa")
+            image_to_paa = root / "ImageToPAA.exe"
+            image_to_paa.write_text("stub", encoding="utf-8")
+
+            def fake_run(command, **kwargs):
+                if Path(command[1]).suffix.lower() == ".paa":
+                    Path(command[2]).write_bytes(b"png")
+                else:
+                    Path(command[2]).write_bytes(b"overwritten paa")
+                return type("Completed", (), {"returncode": 0, "stderr": "", "stdout": ""})()
+
+            with patch("dayz_texture_tool.processors.watermark.subprocess.run", fake_run), patch("dayz_texture_tool.processors.watermark.WaterMark", FakeWaterMark):
+                result = add_watermark(image, "secret", "1", image_to_paa=image_to_paa, overwrite=True)
+
+            self.assertTrue(result.success, result.error)
+            self.assertEqual(result.outputs, [image])
+            self.assertEqual(image.read_bytes(), b"overwritten paa")
 
     def test_detect_watermark_requires_positive_length(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -101,6 +151,28 @@ class WatermarkProcessorTests(unittest.TestCase):
 
             self.assertTrue(result.success)
             self.assertEqual(result.metadata["watermark_text"], "hidden-text")
+
+    def test_detect_watermark_paa_uses_temporary_png(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "source.paa"
+            image.write_bytes(b"paa")
+            image_to_paa = root / "ImageToPAA.exe"
+            image_to_paa.write_text("stub", encoding="utf-8")
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append([Path(part).name for part in command])
+                Path(command[2]).write_bytes(b"png")
+                return type("Completed", (), {"returncode": 0, "stderr": "", "stdout": ""})()
+
+            with patch("dayz_texture_tool.processors.watermark.subprocess.run", fake_run), patch("dayz_texture_tool.processors.watermark.WaterMark", FakeWaterMark):
+                result = detect_watermark(image, "7", 4, image_to_paa=image_to_paa)
+
+            self.assertTrue(result.success, result.error)
+            self.assertEqual(result.metadata["watermark_text"], "hidden-text")
+            self.assertEqual(calls[0][0], "ImageToPAA.exe")
+            self.assertEqual(calls[0][1], "source.paa")
 
     def test_add_watermark_tga_uses_readable_intermediate(self):
         with tempfile.TemporaryDirectory() as tmp:

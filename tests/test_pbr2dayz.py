@@ -297,7 +297,7 @@ class PBR2DayZTests(unittest.TestCase):
             image_to_paa.write_text("stub", encoding="utf-8")
             calls = []
 
-            def fake_watermark(path, content, password):
+            def fake_watermark(path, content, password, image_to_paa=None):
                 calls.append(("watermark", Path(path).name, content, password))
                 return pbr2dayz.ProcessingResult(True, input_path=Path(path), outputs=[Path(path)], processor="Watermark", metadata={"watermark_length": 12})
 
