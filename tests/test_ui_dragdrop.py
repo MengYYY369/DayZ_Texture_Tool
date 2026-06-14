@@ -23,6 +23,8 @@ class DummyApp(main_window.DayZTextureToolApp):
         self.pbr_selected_paths = set()
         self.pbr_folder = None
         self.pbr_root_context = None
+        self.watermark_pending_paths = []
+        self.watermark_selected_paths = set()
         self.selected_game_processor = "DF_NRM"
         self.settings = type("Settings", (), {
             "game_match_mode": "exact",
@@ -34,17 +36,22 @@ class DummyApp(main_window.DayZTextureToolApp):
             "pbr_prefix_mode": "auto",
             "pbr_custom_prefix": "",
             "image_to_paa": "",
+            "watermark_content": "secret",
+            "watermark_password": "9",
+            "watermark_length": 12,
         })()
         self.widgets = {
             "game_delete_source": type("Widget", (), {"get": lambda self: 0})(),
             "game_suffix": type("Widget", (), {"get": lambda self: "_nrm"})(),
             "pbr_delete_source": type("Widget", (), {"get": lambda self: 0})(),
+            "pbr_add_watermark": type("Widget", (), {"get": lambda self: 1})(),
             "normal_type": type("Widget", (), {"get": lambda self: "directx"})(),
             "resolution": type("Widget", (), {"get": lambda self: "auto"})(),
             "make_paa": type("Widget", (), {"get": lambda self: 0})(),
             "paa_path": type("Widget", (), {"get": lambda self: ""})(),
             "game_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
             "pbr_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
+            "watermark_length": type("Widget", (), {"get": lambda self: "12"})(),
         }
         self.rendered = []
         self.refreshed_pending_labels = []
@@ -81,6 +88,9 @@ class DummyApp(main_window.DayZTextureToolApp):
 
     def _save_pbr_naming(self):
         self.saved_pbr_naming = True
+
+    def _save_watermark_settings(self):
+        pass
 
     def _suffix_error(self, suffixes):
         return ""
@@ -260,6 +270,31 @@ class UIDragDropTests(unittest.TestCase):
             process.assert_called_once()
             self.assertEqual(process.call_args.args[0], [one])
             self.assertEqual(process.call_args.kwargs["root_context"], root)
+            self.assertEqual(process.call_args.kwargs["add_watermark"], True)
+            self.assertEqual(process.call_args.kwargs["watermark_content"], "secret")
+            self.assertEqual(process.call_args.kwargs["watermark_password"], "9")
+
+    def test_watermark_add_uses_selected_paths_and_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            one = root / "one.png"
+            two = root / "two.png"
+            one.write_bytes(b"png")
+            two.write_bytes(b"png")
+            app = DummyApp()
+            app.widgets["watermark_status"] = type("Widget", (), {"configure": lambda self, **kwargs: None})()
+
+            main_window.DayZTextureToolApp._set_pending_paths(app, "watermark", [one, two])
+            main_window.DayZTextureToolApp._select_pending_path(app, "watermark", two, False)
+
+            with patch("dayz_texture_tool.ui.main_window.save_settings"), patch("dayz_texture_tool.ui.main_window.add_watermark_files") as process:
+                main_window.DayZTextureToolApp._start_watermark_add_selected(app)
+                app.work()
+
+            process.assert_called_once()
+            self.assertEqual(process.call_args.args[0], [one])
+            self.assertEqual(process.call_args.args[1], "secret")
+            self.assertEqual(process.call_args.args[2], "9")
 
 
 if __name__ == "__main__":

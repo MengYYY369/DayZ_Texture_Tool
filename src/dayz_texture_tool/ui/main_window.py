@@ -21,6 +21,7 @@ from dayz_texture_tool.batch import _matches, collect_image_files, process_game2
 from dayz_texture_tool.models import BatchResult
 from dayz_texture_tool.processors.game2pbr import GAME2PBR_PROCESSORS, SUPPORTED_EXTENSIONS
 from dayz_texture_tool.processors.pbr2dayz import IMAGE_EXTENSIONS, convert_pbr_files
+from dayz_texture_tool.processors.watermark import SUPPORTED_WATERMARK_EXTENSIONS, add_watermark_files, detect_watermark_files
 from dayz_texture_tool.settings import DEFAULT_GAME_OUTPUT_SUFFIXES, DEFAULT_PBR_OUTPUT_SUFFIXES, load_settings, save_settings
 from dayz_texture_tool.ui.i18n import text
 
@@ -75,6 +76,8 @@ class DayZTextureToolApp(DnDCTk):
         self.pbr_root_context: Path | None = None
         self.pbr_pending_paths: list[Path] = []
         self.pbr_selected_paths: set[Path] = set()
+        self.watermark_pending_paths: list[Path] = []
+        self.watermark_selected_paths: set[Path] = set()
         self.widgets: dict[str, object] = {}
         self.pending_select_all_vars: dict[str, BooleanVar] = {}
         self.pages: dict[str, ctk.CTkFrame] = {}
@@ -100,7 +103,7 @@ class DayZTextureToolApp(DnDCTk):
         header.grid_columnconfigure(1, weight=1)
         self.widgets["title_label"] = ctk.CTkLabel(header, font=ctk.CTkFont(size=20, weight="bold"))
         self.widgets["title_label"].grid(row=0, column=0, padx=(20, 16), pady=12, sticky="w")
-        self.widgets["nav"] = ctk.CTkSegmentedButton(header, values=["Game2PBR", "PBR2DayZ", "Settings"], command=self._show_page)
+        self.widgets["nav"] = ctk.CTkSegmentedButton(header, values=["Game2PBR", "PBR2DayZ", "Watermark", "Settings"], command=self._show_page)
         self.widgets["nav"].grid(row=0, column=1, padx=8, pady=12, sticky="ew")
         self.widgets["nav"].set("Game2PBR")
         self.widgets["lang_button"] = ctk.CTkButton(header, width=110, command=self._toggle_language)
@@ -111,9 +114,11 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["page_container"].grid_rowconfigure(0, weight=1)
         self.game_tab = self._page("game")
         self.pbr_tab = self._page("pbr")
+        self.watermark_tab = self._page("watermark")
         self.settings_tab = self._page("settings")
         self._build_game_tab()
         self._build_pbr_tab()
+        self._build_watermark_tab()
         self._build_settings_tab()
         self._show_page("Game2PBR")
 
@@ -198,15 +203,17 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["resolution"].grid(row=0, column=3, padx=6, pady=14)
         self.widgets["make_paa"] = ctk.CTkCheckBox(controls)
         self.widgets["make_paa"].grid(row=0, column=4, padx=10, pady=14)
+        self.widgets["pbr_add_watermark"] = ctk.CTkCheckBox(controls)
+        self.widgets["pbr_add_watermark"].grid(row=0, column=5, padx=10, pady=14)
         self.widgets["pbr_delete_source"] = ctk.CTkCheckBox(controls)
-        self.widgets["pbr_delete_source"].grid(row=0, column=5, padx=10, pady=14)
+        self.widgets["pbr_delete_source"].grid(row=0, column=6, padx=10, pady=14)
         self.widgets["pbr_folder_button"] = ctk.CTkButton(controls, command=self._select_pbr_folder)
-        self.widgets["pbr_folder_button"].grid(row=0, column=6, padx=6, pady=14)
+        self.widgets["pbr_folder_button"].grid(row=0, column=7, padx=6, pady=14)
         self.widgets["pbr_files_button"] = ctk.CTkButton(controls, command=self._select_pbr_files)
-        self.widgets["pbr_files_button"].grid(row=0, column=7, padx=6, pady=14)
+        self.widgets["pbr_files_button"].grid(row=0, column=8, padx=6, pady=14)
         self.widgets["pbr_match_mode"] = ctk.CTkSegmentedButton(controls, values=["exact", "fuzzy"], command=self._on_pbr_match_mode_change)
         self.widgets["pbr_match_mode"].set(self.settings.pbr_match_mode)
-        self.widgets["pbr_match_mode"].grid(row=0, column=8, padx=(6, 14), pady=14)
+        self.widgets["pbr_match_mode"].grid(row=0, column=9, padx=(6, 14), pady=14)
 
         pbr_suffix = ctk.CTkFrame(self.pbr_tab)
         pbr_suffix.grid(row=1, column=0, columnspan=2, padx=14, pady=8, sticky="ew")
@@ -258,9 +265,43 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["pbr_progress"].set(0)
         self.widgets["pbr_progress"].grid(row=5, column=1, padx=(8, 18), pady=(4, 14), sticky="ew")
 
+    def _build_watermark_tab(self) -> None:
+        self.watermark_tab.grid_columnconfigure(0, weight=7)
+        self.watermark_tab.grid_columnconfigure(1, weight=3)
+        self.watermark_tab.grid_rowconfigure(1, weight=1)
+        controls = ctk.CTkFrame(self.watermark_tab)
+        controls.grid(row=0, column=0, columnspan=2, padx=14, pady=(14, 8), sticky="ew")
+        controls.grid_columnconfigure(1, weight=1)
+        self.widgets["watermark_length_label"] = ctk.CTkLabel(controls)
+        self.widgets["watermark_length_label"].grid(row=0, column=0, padx=14, pady=14, sticky="w")
+        self.widgets["watermark_length"] = ctk.CTkEntry(controls, width=120)
+        self.widgets["watermark_length"].insert(0, str(self.settings.watermark_length))
+        self.widgets["watermark_length"].grid(row=0, column=1, padx=8, pady=14, sticky="w")
+        self.widgets["watermark_files_button"] = ctk.CTkButton(controls, command=self._select_watermark_files)
+        self.widgets["watermark_files_button"].grid(row=0, column=2, padx=6, pady=14)
+        self.widgets["watermark_drop"] = self._drop_area(self.watermark_tab, self._on_watermark_drop, "drop_watermark_files", "drop_watermark_files_hint")
+        self.widgets["watermark_drop"].grid(row=1, column=0, rowspan=2, padx=(14, 8), pady=8, sticky="nsew")
+        self.widgets["watermark_pending"] = self._pending_panel(self.watermark_tab)
+        self.widgets["watermark_pending"].grid(row=1, column=1, padx=(8, 14), pady=(8, 2), sticky="nsew")
+        actions = ctk.CTkFrame(self.watermark_tab, fg_color="transparent")
+        actions.grid(row=2, column=1, padx=(8, 14), pady=(2, 8), sticky="sew")
+        for index in range(3):
+            actions.grid_columnconfigure(index, weight=1)
+        self.widgets["watermark_clear_selected_button"] = ctk.CTkButton(actions, command=lambda: self._clear_selected_pending("watermark"))
+        self.widgets["watermark_clear_selected_button"].grid(row=0, column=0, padx=(0, 6), sticky="ew")
+        self.widgets["watermark_add_button"] = ctk.CTkButton(actions, command=self._start_watermark_add_selected)
+        self.widgets["watermark_add_button"].grid(row=0, column=1, padx=6, sticky="ew")
+        self.widgets["watermark_detect_button"] = ctk.CTkButton(actions, command=self._start_watermark_detect_selected)
+        self.widgets["watermark_detect_button"].grid(row=0, column=2, padx=(6, 0), sticky="ew")
+        self.widgets["watermark_status"] = ctk.CTkLabel(self.watermark_tab, text_color="gray55", anchor="w")
+        self.widgets["watermark_status"].grid(row=3, column=0, padx=(18, 8), pady=(4, 14), sticky="ew")
+        self.widgets["watermark_progress"] = ctk.CTkProgressBar(self.watermark_tab, mode="determinate")
+        self.widgets["watermark_progress"].set(0)
+        self.widgets["watermark_progress"].grid(row=3, column=1, padx=(8, 18), pady=(4, 14), sticky="ew")
+
     def _build_settings_tab(self) -> None:
         self.settings_tab.grid_columnconfigure(1, weight=1)
-        self.settings_tab.grid_rowconfigure(1, weight=1)
+        self.settings_tab.grid_rowconfigure(3, weight=1)
         self.widgets["paa_label"] = ctk.CTkLabel(self.settings_tab)
         self.widgets["paa_label"].grid(row=0, column=0, padx=(18, 8), pady=20, sticky="w")
         self.widgets["paa_path"] = ctk.CTkEntry(self.settings_tab)
@@ -268,10 +309,20 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["paa_path"].grid(row=0, column=1, padx=8, pady=20, sticky="ew")
         self.widgets["paa_browse"] = ctk.CTkButton(self.settings_tab, command=self._browse_paa)
         self.widgets["paa_browse"].grid(row=0, column=2, padx=8, pady=20)
+        self.widgets["watermark_content_label"] = ctk.CTkLabel(self.settings_tab)
+        self.widgets["watermark_content_label"].grid(row=1, column=0, padx=(18, 8), pady=(8, 12), sticky="w")
+        self.widgets["watermark_content"] = ctk.CTkEntry(self.settings_tab)
+        self.widgets["watermark_content"].insert(0, self.settings.watermark_content)
+        self.widgets["watermark_content"].grid(row=1, column=1, padx=8, pady=(8, 12), sticky="ew")
+        self.widgets["watermark_password_label"] = ctk.CTkLabel(self.settings_tab)
+        self.widgets["watermark_password_label"].grid(row=2, column=0, padx=(18, 8), pady=(8, 12), sticky="w")
+        self.widgets["watermark_password"] = ctk.CTkEntry(self.settings_tab)
+        self.widgets["watermark_password"].insert(0, self.settings.watermark_password)
+        self.widgets["watermark_password"].grid(row=2, column=1, padx=8, pady=(8, 12), sticky="ew")
         self.widgets["settings_save"] = ctk.CTkButton(self.settings_tab, command=self._save_settings)
-        self.widgets["settings_save"].grid(row=0, column=3, padx=(8, 18), pady=20)
+        self.widgets["settings_save"].grid(row=2, column=3, padx=(8, 18), pady=(8, 12))
         self.widgets["settings_status"] = ctk.CTkLabel(self.settings_tab, text_color="gray55", anchor="w")
-        self.widgets["settings_status"].grid(row=1, column=0, columnspan=4, padx=18, pady=12, sticky="new")
+        self.widgets["settings_status"].grid(row=3, column=0, columnspan=4, padx=18, pady=12, sticky="new")
 
     def _drop_area(self, parent, handler, title_key: str, hint_key: str):
         frame = ctk.CTkFrame(parent, corner_radius=12, border_width=2)
@@ -309,9 +360,11 @@ class DayZTextureToolApp(DnDCTk):
         page_map = {
             "Game2PBR": "game",
             "PBR2DayZ": "pbr",
+            "Watermark": "watermark",
             "Settings": "settings",
             text(self.language, "game2pbr"): "game",
             text(self.language, "pbr2dayz"): "pbr",
+            text(self.language, "watermark"): "watermark",
             text(self.language, "settings"): "settings",
         }
         page = page_map.get(value, value)
@@ -326,6 +379,7 @@ class DayZTextureToolApp(DnDCTk):
         self._save_current_game_output_suffixes()
         self._save_pbr_suffixes()
         self._save_pbr_naming()
+        self._save_watermark_settings()
         self.language = "en" if self.language == "zh" else "zh"
         self.settings.language = self.language
         save_settings(self.settings)
@@ -335,8 +389,8 @@ class DayZTextureToolApp(DnDCTk):
         self.title(text(self.language, "title"))
         self.widgets["title_label"].configure(text=text(self.language, "title"))
         self.widgets["lang_button"].configure(text=text(self.language, "language"))
-        self.widgets["nav"].configure(values=[text(self.language, "game2pbr"), text(self.language, "pbr2dayz"), text(self.language, "settings")])
-        nav_values = {"game": text(self.language, "game2pbr"), "pbr": text(self.language, "pbr2dayz"), "settings": text(self.language, "settings")}
+        self.widgets["nav"].configure(values=[text(self.language, "game2pbr"), text(self.language, "pbr2dayz"), text(self.language, "watermark"), text(self.language, "settings")])
+        nav_values = {"game": text(self.language, "game2pbr"), "pbr": text(self.language, "pbr2dayz"), "watermark": text(self.language, "watermark"), "settings": text(self.language, "settings")}
         self.widgets["nav"].set(nav_values.get(self.current_page, text(self.language, "game2pbr")))
         self.widgets["game_processor_label"].configure(text=text(self.language, "processor"))
         self.widgets["game_files_button"].configure(text=text(self.language, "select_files"))
@@ -353,6 +407,7 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["normal_label"].configure(text=text(self.language, "normal_type"))
         self.widgets["resolution_label"].configure(text=text(self.language, "resolution"))
         self.widgets["make_paa"].configure(text=text(self.language, "make_paa"))
+        self.widgets["pbr_add_watermark"].configure(text=text(self.language, "add_watermark"))
         self.widgets["pbr_delete_source"].configure(text=text(self.language, "delete_source"))
         self.widgets["pbr_folder_button"].configure(text=text(self.language, "select_folder"))
         self.widgets["pbr_files_button"].configure(text=text(self.language, "select_specific_images"))
@@ -369,14 +424,23 @@ class DayZTextureToolApp(DnDCTk):
         self.widgets["paa_label"].configure(text=text(self.language, "image_to_paa"))
         self.widgets["paa_browse"].configure(text=text(self.language, "browse"))
         self.widgets["settings_save"].configure(text=text(self.language, "save"))
+        self.widgets["watermark_length_label"].configure(text=text(self.language, "watermark_length"))
+        self.widgets["watermark_files_button"].configure(text=text(self.language, "select_files"))
+        self.widgets["watermark_clear_selected_button"].configure(text=text(self.language, "clear_selected"))
+        self.widgets["watermark_add_button"].configure(text=text(self.language, "add_watermark"))
+        self.widgets["watermark_detect_button"].configure(text=text(self.language, "detect_watermark"))
+        self.widgets["watermark_content_label"].configure(text=text(self.language, "watermark_content"))
+        self.widgets["watermark_password_label"].configure(text=text(self.language, "watermark_password"))
         for pbr_type in PBR_TYPES:
             self.widgets[f"pbr_{pbr_type}_label"].configure(text=text(self.language, f"pbr_suffix_{pbr_type}"))
         self._refresh_mode_menu()
         self._render_game_output_suffixes()
         self._apply_drop_text("game_drop")
         self._apply_drop_text("pbr_drop")
+        self._apply_drop_text("watermark_drop")
         self._render_pending("game_pending", self._game_pending_paths())
         self._render_pending("pbr_pending", self._pbr_pending_paths())
+        self._render_pending("watermark_pending", self._watermark_pending_paths())
         self._update_status_labels()
 
     def _apply_drop_text(self, key: str) -> None:
@@ -557,6 +621,9 @@ class DayZTextureToolApp(DnDCTk):
     def _pbr_pending_paths(self) -> list[Path]:
         return list(self.pbr_pending_paths)
 
+    def _watermark_pending_paths(self) -> list[Path]:
+        return list(self.watermark_pending_paths)
+
     def _render_pending(self, key: str, paths: list[Path]) -> None:
         panel = self.widgets[key]
         page = key.split("_", 1)[0]
@@ -593,6 +660,11 @@ class DayZTextureToolApp(DnDCTk):
         pbr_status = text(self.language, "pending_status").format(total=pbr_total, selected=pbr_selected) if pbr_total else text(self.language, "status_ready")
         self.widgets["game_status"].configure(text=game_status)
         self.widgets["pbr_status"].configure(text=pbr_status)
+        if "watermark_status" in self.widgets:
+            watermark_total = len(self.watermark_pending_paths)
+            watermark_selected = len(self.watermark_selected_paths)
+            watermark_status = text(self.language, "pending_status").format(total=watermark_total, selected=watermark_selected) if watermark_total else text(self.language, "status_ready")
+            self.widgets["watermark_status"].configure(text=watermark_status)
         self.widgets["settings_status"].configure(text="")
 
     def _select_game_files(self) -> None:
@@ -623,6 +695,12 @@ class DayZTextureToolApp(DnDCTk):
             self.pbr_root_context = self._root_context_for_selected_files(selected)
             self._set_pending_paths("pbr", selected)
 
+    def _select_watermark_files(self) -> None:
+        files = filedialog.askopenfilenames(filetypes=[("Images", "*.png *.tga *.tif *.tiff *.jpg *.jpeg *.bmp *.paa")])
+        selected = self._unique_image_paths([Path(file) for file in files], SUPPORTED_WATERMARK_EXTENSIONS | {".paa"})
+        if selected:
+            self._set_pending_paths("watermark", selected)
+
     def _root_context_for_selected_files(self, files: list[Path]) -> Path | None:
         if not files:
             return None
@@ -642,16 +720,29 @@ class DayZTextureToolApp(DnDCTk):
         self._save_current_game_output_suffixes()
         self._save_pbr_suffixes()
         self._save_pbr_naming()
+        self._save_watermark_settings()
         self.settings.image_to_paa = self.widgets["paa_path"].get()
         self.settings.language = self.language
         save_settings(self.settings)
         self.widgets["settings_status"].configure(text=text(self.language, "saved"))
+
+    def _save_watermark_settings(self) -> None:
+        if "watermark_content" in self.widgets:
+            self.settings.watermark_content = self.widgets["watermark_content"].get()
+        if "watermark_password" in self.widgets:
+            self.settings.watermark_password = self.widgets["watermark_password"].get()
+        if "watermark_length" in self.widgets:
+            try:
+                self.settings.watermark_length = int(self.widgets["watermark_length"].get() or "0")
+            except ValueError:
+                self.settings.watermark_length = 0
 
     def _on_close(self) -> None:
         self._save_current_game_suffix()
         self._save_current_game_output_suffixes()
         self._save_pbr_suffixes()
         self._save_pbr_naming()
+        self._save_watermark_settings()
         self.settings.image_to_paa = self.widgets["paa_path"].get()
         self.settings.language = self.language
         save_settings(self.settings)
@@ -691,6 +782,18 @@ class DayZTextureToolApp(DnDCTk):
             pending.extend(files)
         if pending:
             self._set_pending_paths("pbr", self._unique_image_paths(pending, IMAGE_EXTENSIONS))
+
+    def _on_watermark_drop(self, event) -> None:
+        paths = [Path(item) for item in self.tk.splitlist(event.data)]
+        extensions = SUPPORTED_WATERMARK_EXTENSIONS | {".paa"}
+        pending = []
+        for path in paths:
+            if path.is_dir():
+                pending.extend(sorted(item for item in path.rglob("*") if item.is_file() and item.suffix.lower() in extensions))
+            elif path.is_file() and path.suffix.lower() in extensions:
+                pending.append(path)
+        if pending:
+            self._set_pending_paths("watermark", self._unique_image_paths(pending, extensions))
 
     def _start_game2pbr_all(self) -> None:
         self._set_all_pending("game", True)
@@ -741,10 +844,33 @@ class DayZTextureToolApp(DnDCTk):
         resolution = self.widgets["resolution"].get()
         make_paa = bool(self.widgets["make_paa"].get())
         delete_source = bool(self.widgets["pbr_delete_source"].get())
+        add_watermark = bool(self.widgets["pbr_add_watermark"].get())
         image_to_paa = self.settings.image_to_paa
         self._start_progress("pbr_progress")
         progress_callback = self._progress_callback("pbr_progress")
-        self._run_async(lambda: convert_pbr_files(selected_paths, root_context=self.pbr_root_context, normal_type=normal_type, resolution=resolution, make_paa=make_paa, image_to_paa=image_to_paa, patterns=self.settings.pbr_suffixes, match_mode=self.settings.pbr_match_mode, delete_source=delete_source, output_suffixes=self.settings.pbr_output_suffixes, prefix_mode=self.settings.pbr_prefix_mode, custom_prefix=self.settings.pbr_custom_prefix, progress_callback=progress_callback), "pbr_status", "pbr_progress")
+        self._run_async(lambda: convert_pbr_files(selected_paths, root_context=self.pbr_root_context, normal_type=normal_type, resolution=resolution, make_paa=make_paa, image_to_paa=image_to_paa, patterns=self.settings.pbr_suffixes, match_mode=self.settings.pbr_match_mode, delete_source=delete_source, output_suffixes=self.settings.pbr_output_suffixes, prefix_mode=self.settings.pbr_prefix_mode, custom_prefix=self.settings.pbr_custom_prefix, progress_callback=progress_callback, add_watermark=add_watermark, watermark_content=self.settings.watermark_content, watermark_password=self.settings.watermark_password), "pbr_status", "pbr_progress")
+
+    def _start_watermark_add_selected(self) -> None:
+        selected_paths = self._selected_pending_paths("watermark")
+        if not selected_paths:
+            self.widgets["watermark_status"].configure(text=text(self.language, "no_input"))
+            return
+        self._save_watermark_settings()
+        save_settings(self.settings)
+        self._start_progress("watermark_progress")
+        progress_callback = self._progress_callback("watermark_progress")
+        self._run_async(lambda: add_watermark_files(selected_paths, self.settings.watermark_content, self.settings.watermark_password, progress_callback), "watermark_status", "watermark_progress")
+
+    def _start_watermark_detect_selected(self) -> None:
+        selected_paths = self._selected_pending_paths("watermark")
+        if not selected_paths:
+            self.widgets["watermark_status"].configure(text=text(self.language, "no_input"))
+            return
+        self._save_watermark_settings()
+        save_settings(self.settings)
+        self._start_progress("watermark_progress")
+        progress_callback = self._progress_callback("watermark_progress")
+        self._run_async(lambda: detect_watermark_files(selected_paths, self.settings.watermark_password, self.settings.watermark_length, progress_callback), "watermark_status", "watermark_progress")
 
     def _suffix_error(self, suffixes: dict[str, str]) -> str:
         values = list(suffixes.values())
@@ -789,6 +915,17 @@ class DayZTextureToolApp(DnDCTk):
         outputs = len(result.outputs)
         if outputs:
             message = f"{message} {text(self.language, 'outputs').format(count=outputs)}"
+        watermark_lengths = [item.metadata.get("watermark_length") for item in result.results if item.metadata.get("watermark_length")]
+        watermark_texts = [item.metadata.get("watermark_text") for item in result.results if item.metadata.get("watermark_text")]
+        if watermark_lengths:
+            self.settings.watermark_length = int(watermark_lengths[-1])
+            if "watermark_length" in self.widgets:
+                self.widgets["watermark_length"].delete(0, "end")
+                self.widgets["watermark_length"].insert(0, str(self.settings.watermark_length))
+            save_settings(self.settings)
+            message = f"{message} wm_bit={watermark_lengths[-1]}"
+        if watermark_texts:
+            message = f"{message} {text(self.language, 'watermark_result').format(value=watermark_texts[-1])}"
         self.widgets[status_key].configure(text=message)
 
     def _show_error(self, status_key: str, progress_key: str, error: str) -> None:
