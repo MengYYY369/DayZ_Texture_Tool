@@ -47,6 +47,7 @@ class DummyApp(main_window.DayZTextureToolApp):
             "pbr_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
         }
         self.rendered = []
+        self.refreshed_pending_labels = []
         self.updated = False
         self.work = None
         self.saved_game_suffix = False
@@ -56,6 +57,9 @@ class DummyApp(main_window.DayZTextureToolApp):
 
     def _render_pending(self, key, paths):
         self.rendered.append((key, paths))
+
+    def _refresh_pending_label(self, key):
+        self.refreshed_pending_labels.append(key)
 
     def _pbr_pending_paths(self):
         return list(self.pbr_pending_paths)
@@ -169,6 +173,21 @@ class UIDragDropTests(unittest.TestCase):
             main_window.DayZTextureToolApp._set_all_pending(app, "game", True)
 
             self.assertEqual(app.game_selected_paths, {one, two})
+
+    def test_single_pending_selection_does_not_rerender_full_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [root / f"image_{index}.png" for index in range(200)]
+            for path in paths:
+                path.write_bytes(b"png")
+            app = DummyApp()
+            main_window.DayZTextureToolApp._set_pending_paths(app, "game", paths)
+
+            main_window.DayZTextureToolApp._select_pending_path(app, "game", paths[0], False)
+
+            self.assertEqual(len(app.rendered), 1)
+            self.assertEqual(app.refreshed_pending_labels, ["game_pending"])
+            self.assertNotIn(paths[0], app.game_selected_paths)
 
     def test_game_process_selected_uses_current_processor_and_selected_paths_only(self):
         with tempfile.TemporaryDirectory() as tmp:

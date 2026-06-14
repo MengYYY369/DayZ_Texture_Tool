@@ -76,6 +76,7 @@ class DayZTextureToolApp(DnDCTk):
         self.pbr_pending_paths: list[Path] = []
         self.pbr_selected_paths: set[Path] = set()
         self.widgets: dict[str, object] = {}
+        self.pending_select_all_vars: dict[str, BooleanVar] = {}
         self.pages: dict[str, ctk.CTkFrame] = {}
         self.game_output_entries: dict[str, ctk.CTkEntry] = {}
         self.current_page = "game"
@@ -521,7 +522,7 @@ class DayZTextureToolApp(DnDCTk):
             selected_paths.add(path)
         else:
             selected_paths.discard(path)
-        self._render_pending(widget_key, self._pending_paths_for(page))
+        self._refresh_pending_label(widget_key)
         self._update_status_labels()
 
     def _set_all_pending(self, page: str, selected: bool) -> None:
@@ -567,10 +568,21 @@ class DayZTextureToolApp(DnDCTk):
             ctk.CTkLabel(panel, text=text(self.language, "pending_empty"), text_color="gray55", anchor="w").grid(row=0, column=0, padx=8, pady=8, sticky="ew")
             return
         all_var = BooleanVar(value=len(selected) == len(paths))
+        self.pending_select_all_vars[key] = all_var
         ctk.CTkCheckBox(panel, text=text(self.language, "select_all"), variable=all_var, command=lambda page=page, var=all_var: self._set_all_pending(page, bool(var.get()))).grid(row=0, column=0, padx=8, pady=(6, 2), sticky="w")
         for index, path in enumerate(paths, start=1):
             var = BooleanVar(value=path in selected)
             ctk.CTkCheckBox(panel, text=path.name, variable=var, command=lambda page=page, path=path, var=var: self._select_pending_path(page, path, bool(var.get()))).grid(row=index, column=0, padx=8, pady=(6, 0), sticky="ew")
+
+    def _refresh_pending_label(self, key: str) -> None:
+        panel = self.widgets[key]
+        page = key.split("_", 1)[0]
+        paths = self._pending_paths_for(page)
+        selected = self._selected_pending_paths(page)
+        panel.configure(label_text=text(self.language, "pending_title").format(count=len(paths), selected=len(selected)))
+        all_var = self.pending_select_all_vars.get(key)
+        if all_var:
+            all_var.set(bool(paths) and len(selected) == len(paths))
 
     def _update_status_labels(self) -> None:
         game_total = len(self.game_pending_paths)
