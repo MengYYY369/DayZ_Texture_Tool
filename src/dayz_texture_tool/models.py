@@ -14,6 +14,7 @@ class ProcessingResult:
     elapsed_ms: int = 0
     error: str = ""
     messages: list[str] = field(default_factory=list)
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
