@@ -25,6 +25,8 @@ class DummyApp(main_window.DayZTextureToolApp):
         self.pbr_root_context = None
         self.watermark_pending_paths = []
         self.watermark_selected_paths = set()
+        self.smdi_pending_paths = []
+        self.smdi_selected_paths = set()
         self.selected_game_processor = "DF_NRM"
         self.settings = type("Settings", (), {
             "game_match_mode": "exact",
@@ -39,6 +41,7 @@ class DummyApp(main_window.DayZTextureToolApp):
             "watermark_content": "secret",
             "watermark_password": "9",
             "watermark_length": 12,
+            "smdi_specular_power": 10.0,
         })()
         self.widgets = {
             "game_delete_source": type("Widget", (), {"get": lambda self: 0})(),
@@ -53,6 +56,9 @@ class DummyApp(main_window.DayZTextureToolApp):
             "game_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
             "pbr_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
             "watermark_length": type("Widget", (), {"get": lambda self: "12"})(),
+            "smdi_specular_power": type("Widget", (), {"get": lambda self: "10"})(),
+            "smdi_make_paa": type("Widget", (), {"get": lambda self: 1})(),
+            "smdi_status": type("Widget", (), {"configure": lambda self, **kwargs: None})(),
         }
         self.rendered = []
         self.refreshed_pending_labels = []
@@ -93,6 +99,12 @@ class DummyApp(main_window.DayZTextureToolApp):
     def _save_watermark_settings(self):
         pass
 
+    def _save_smdi_settings(self):
+        pass
+
+    def _smdi_pending_paths(self):
+        return list(self.smdi_pending_paths)
+
     def _suffix_error(self, suffixes):
         return ""
 
@@ -102,7 +114,7 @@ class DummyApp(main_window.DayZTextureToolApp):
     def _progress_callback(self, progress_key):
         return None
 
-    def _run_async(self, work, status_key, progress_key):
+    def _run_async(self, work, status_key, progress_key, on_result=None):
         self.work = work
 
 
@@ -298,6 +310,43 @@ class UIDragDropTests(unittest.TestCase):
             self.assertEqual(process.call_args.args[2], "9")
             self.assertEqual(process.call_args.kwargs["image_to_paa"], "D:/tools/ImageToPAA.exe")
             self.assertEqual(process.call_args.kwargs["overwrite"], True)
+
+    def test_smdi_process_selected_uses_selected_paths_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            one = root / "one_co.png"
+            two = root / "two_co.png"
+            one.write_bytes(b"png")
+            two.write_bytes(b"png")
+            app = DummyApp()
+
+            main_window.DayZTextureToolApp._set_pending_paths(app, "smdi", [one, two])
+            main_window.DayZTextureToolApp._select_pending_path(app, "smdi", two, False)
+
+            with patch("dayz_texture_tool.ui.main_window.save_settings"), patch("dayz_texture_tool.ui.main_window.convert_color_to_smdi_files") as process:
+                main_window.DayZTextureToolApp._start_smdi_selected(app)
+                app.work()
+
+            process.assert_called_once()
+            self.assertEqual(process.call_args.args[0], [one])
+            self.assertEqual(process.call_args.kwargs["specular_power"], "10")
+            self.assertEqual(process.call_args.kwargs["make_paa"], True)
+            self.assertEqual(process.call_args.kwargs["image_to_paa"], "D:/tools/ImageToPAA.exe")
+
+    def test_smdi_drop_accepts_paa_and_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paa = root / "armor_co.paa"
+            png = root / "armor_ca.png"
+            other = root / "notes.txt"
+            for path in (paa, png, other):
+                path.write_bytes(b"x")
+            app = DummyApp()
+
+            main_window.DayZTextureToolApp._on_smdi_drop(app, DummyEvent(f"{paa}|{png}|{other}"))
+
+            self.assertEqual(app.smdi_pending_paths, [paa, png])
+            self.assertEqual(app.smdi_selected_paths, {paa, png})
 
 
 if __name__ == "__main__":
