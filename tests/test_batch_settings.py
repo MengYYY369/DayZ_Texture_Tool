@@ -166,6 +166,17 @@ class BatchAndSettingsTests(unittest.TestCase):
             self.assertEqual(loaded.watermark_password, "9")
             self.assertEqual(loaded.watermark_length, 12)
 
+    def test_settings_persist_smdi_specular_power(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "settings.json"
+            settings = AppSettings()
+            settings.smdi_specular_power = 7.5
+
+            save_settings(settings, path)
+            loaded = load_settings(path)
+
+            self.assertEqual(loaded.smdi_specular_power, 7.5)
+
 
 if __name__ == "__main__":
     unittest.main()

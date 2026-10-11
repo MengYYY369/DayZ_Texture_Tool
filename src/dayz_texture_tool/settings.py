@@ -63,6 +63,7 @@ class AppSettings:
     watermark_content: str = ""
     watermark_password: str = "1"
     watermark_length: int = 0
+    smdi_specular_power: float = 10.0
 
 
 def load_settings(path: str | Path = DEFAULT_SETTINGS_PATH) -> AppSettings:
