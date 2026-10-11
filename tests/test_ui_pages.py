@@ -449,17 +449,17 @@ class RvmatPageTests(WindowCase):
         self.assertTrue(opened.called)
         self.assertIn("crate_worn.rvmat", opened.call_args[0][0].toLocalFile())
 
-    def test_the_page_re_renders_on_a_language_switch(self):
-        # 中文那一半要等 Task 7 把 .qm 编出来才能断言 —— 这里只证明切换会重画，
-        # 且切回来是干净的英文。完整的中英对照在 Task 7 Step 4。
+    def test_language_switch_keeps_the_page_in_english_and_chinese(self):
         page = self.page("rvmat")
         self.assertEqual(page.title_label.text(), "RVMAT")
         self.win.toggle_language()
         pump()
+        self.assertEqual(page.status.action.text(), "开始处理")
+        self.assertEqual(page.mode_text(), "变体：_worn _damage _destruct")
         self.win.toggle_language()
         pump()
         self.assertEqual(page.status.action.text(), "Start")
-        self.assertEqual(page.title_label.text(), "RVMAT")
+        self.assertEqual(page.mode_text(), "Variants: _worn _damage _destruct")
 
 
 if __name__ == "__main__":
