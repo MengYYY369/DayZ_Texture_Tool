@@ -13,20 +13,10 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
 from dayz_texture_tool.models import BatchResult, ProcessingResult
+from dayz_texture_tool.settings import DEFAULT_RVMAT_DAMAGE_TEXTURES, RVMAT_VARIANTS
 
 RVMAT_EXTENSION = ".rvmat"
 PROCESSOR = "RVMAT"
-
-# DayZ 引擎按这几个名字找损坏材质，改了就失效，所以写死。
-# Task 2 会把这两个常量挪进 settings.py 当单一真相源，然后在这里原样
-# re-export —— 所以本文件的其他地方、以及测试，导入路径永远不变。
-RVMAT_VARIANTS: tuple[str, ...] = ("_worn", "_damage", "_destruct")
-# 每个变体把 class Stage3 的 texture 指向哪张贴图。
-DEFAULT_RVMAT_DAMAGE_TEXTURES: dict[str, str] = {
-    "_worn": r"dz\characters\data\generic_worn_mc.paa",
-    "_damage": r"dz\characters\data\generic_damage_mc.paa",
-    "_destruct": r"dz\characters\data\generic_destruct_mc.paa",
-}
 
 # 二值化过的 rvmat（DayZ 编译后的 config）以这四个字节开头，是二进制不是文本。
 BINARY_MAGIC = b"\x00raP"

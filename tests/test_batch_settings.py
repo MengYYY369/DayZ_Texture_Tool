@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import unittest
@@ -176,6 +177,43 @@ class BatchAndSettingsTests(unittest.TestCase):
             loaded = load_settings(path)
 
             self.assertEqual(loaded.smdi_specular_power, 7.5)
+
+
+class RvmatSettingsTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "settings.json"
+
+    def test_defaults_match_the_dayz_generic_damage_textures(self):  # Q3
+        settings = load_settings(self.path)
+        self.assertEqual(settings.rvmat_damage_textures["_worn"], r"dz\characters\data\generic_worn_mc.paa")
+        self.assertEqual(settings.rvmat_damage_textures["_damage"], r"dz\characters\data\generic_damage_mc.paa")
+        self.assertEqual(settings.rvmat_damage_textures["_destruct"], r"dz\characters\data\generic_destruct_mc.paa")
+
+    def test_default_skip_list_is_the_three_variants(self):  # Q7, Q15
+        self.assertEqual(load_settings(self.path).rvmat_excluded_suffixes, ["_worn", "_damage", "_destruct"])
+
+    def test_edited_values_survive_a_round_trip(self):  # Q3, Q15
+        settings = load_settings(self.path)
+        settings.rvmat_damage_textures["_worn"] = r"dz\data\custom.paa"
+        settings.rvmat_excluded_suffixes = ["_worn", "_old"]
+        save_settings(settings, self.path)
+
+        reloaded = load_settings(self.path)
+        self.assertEqual(reloaded.rvmat_damage_textures["_worn"], r"dz\data\custom.paa")
+        self.assertEqual(reloaded.rvmat_damage_textures["_damage"], r"dz\characters\data\generic_damage_mc.paa")
+        self.assertEqual(reloaded.rvmat_excluded_suffixes, ["_worn", "_old"])
+
+    def test_a_settings_file_written_before_this_feature_still_loads(self):
+        self.path.write_text(json.dumps({"language": "zh"}), encoding="utf-8")
+        settings = load_settings(self.path)
+        self.assertEqual(settings.language, "zh")
+        self.assertEqual(settings.rvmat_excluded_suffixes, ["_worn", "_damage", "_destruct"])
+
+    def test_an_emptied_skip_list_stays_empty(self):  # Q15
+        self.path.write_text(json.dumps({"rvmat_excluded_suffixes": []}), encoding="utf-8")
+        self.assertEqual(load_settings(self.path).rvmat_excluded_suffixes, [])
 
 
 if __name__ == "__main__":

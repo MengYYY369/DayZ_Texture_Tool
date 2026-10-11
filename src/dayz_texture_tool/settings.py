@@ -47,11 +47,24 @@ DEFAULT_PBR_OUTPUT_SUFFIXES = {
     "as": "_as",
 }
 
+# DayZ 引擎按这几个名字找损坏材质，改了就失效，所以写死。
+RVMAT_VARIANTS: tuple[str, ...] = ("_worn", "_damage", "_destruct")
+
+# 每个变体把 class Stage3 的 texture 指向哪张贴图。可以在设置页改。
+DEFAULT_RVMAT_DAMAGE_TEXTURES: dict[str, str] = {
+    "_worn": r"dz\characters\data\generic_worn_mc.paa",
+    "_damage": r"dz\characters\data\generic_damage_mc.paa",
+    "_destruct": r"dz\characters\data\generic_destruct_mc.paa",
+}
+
+# 名字以这些结尾的文件不当输入（它们已经是变体了）。可以在设置页改。
+DEFAULT_RVMAT_EXCLUDED_SUFFIXES: list[str] = list(RVMAT_VARIANTS)
+
 
 @dataclass
 class AppSettings:
     image_to_paa: str = r"D:\steam\steamapps\common\DayZ Tools\Bin\ImageToPAA\ImageToPAA.exe"
-    language: str = "zh"
+    language: str = "en"
     game_suffixes: dict[str, list[str]] = field(default_factory=lambda: {key: list(value) for key, value in DEFAULT_GAME_SUFFIXES.items()})
     game_output_suffixes: dict[str, dict[str, str]] = field(default_factory=lambda: {key: dict(value) for key, value in DEFAULT_GAME_OUTPUT_SUFFIXES.items()})
     pbr_suffixes: dict[str, list[str]] = field(default_factory=lambda: {key: list(value) for key, value in DEFAULT_PBR_SUFFIXES.items()})
@@ -64,6 +77,11 @@ class AppSettings:
     watermark_password: str = "1"
     watermark_length: int = 0
     smdi_specular_power: float = 10.0
+    rvmat_damage_textures: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_RVMAT_DAMAGE_TEXTURES))
+    rvmat_excluded_suffixes: list[str] = field(default_factory=lambda: list(DEFAULT_RVMAT_EXCLUDED_SUFFIXES))
+    theme: str = "dark"
+    last_page: str = "game"
+    window_geometry: str = ""
 
 
 def load_settings(path: str | Path = DEFAULT_SETTINGS_PATH) -> AppSettings:
@@ -78,6 +96,7 @@ def load_settings(path: str | Path = DEFAULT_SETTINGS_PATH) -> AppSettings:
         settings.game_output_suffixes = _merge_game_output_suffixes(DEFAULT_GAME_OUTPUT_SUFFIXES, settings.game_output_suffixes)
         settings.pbr_suffixes = _merge_suffixes(DEFAULT_PBR_SUFFIXES, settings.pbr_suffixes)
         settings.pbr_output_suffixes = _merge_value_map(DEFAULT_PBR_OUTPUT_SUFFIXES, settings.pbr_output_suffixes)
+        settings.rvmat_damage_textures = _merge_value_map(DEFAULT_RVMAT_DAMAGE_TEXTURES, settings.rvmat_damage_textures)
         return settings
     except Exception:
         return AppSettings()
