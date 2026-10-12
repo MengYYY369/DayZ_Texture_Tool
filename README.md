@@ -144,7 +144,7 @@ This creates a virtual environment, installs PyInstaller, runs the test suite, b
 .venv\Scripts\python -m unittest discover -s tests
 ```
 
-143 tests: 69 cover the processing logic, 74 cover the interface.
+155 tests: 112 cover the processing logic, 43 cover the interface.
 
 The processing layer (`processors/`, `batch.py`, `models.py`, `settings.py`) has no GUI dependency and can be imported and tested on its own. Interface tests run headless through Qt's `offscreen` platform plugin.
 

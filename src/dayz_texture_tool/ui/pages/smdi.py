@@ -36,8 +36,7 @@ class SmdiPage(FilePage):
         self._power_box = labelled(self.tr("Specular"), self.power)
 
         self.add_toolbar(self._power_box, self.make_paa)
-        self.add_toolbar_stretch()
-        self.add_toolbar(self.add_button)
+        self.add_toolbar_actions()
 
         self.set_empty_text(
             self.tr("Drop color textures here"),

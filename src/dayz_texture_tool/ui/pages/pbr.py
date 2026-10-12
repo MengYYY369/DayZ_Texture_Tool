@@ -109,8 +109,7 @@ class PbrPage(FilePage):
             self.add_watermark,
             self.delete_source,
         )
-        self.add_toolbar_stretch()
-        self.add_toolbar(self.add_button)
+        self.add_toolbar_actions()
 
         self.set_empty_text(
             self.tr("Drop PBR texture sets here"),

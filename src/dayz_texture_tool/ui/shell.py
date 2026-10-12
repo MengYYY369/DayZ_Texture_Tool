@@ -9,7 +9,7 @@ from PySide6.QtCore import QByteArray, QTranslator
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QStackedWidget, QWidget
 
 from ..settings import AppSettings, load_settings, save_settings
-from . import session, theme
+from . import paa, session, theme
 from .pages.game import GamePage
 from .pages.mark import MarkPage
 from .pages.pbr import PbrPage
@@ -44,6 +44,7 @@ class MainWindow(QWidget):
     def __init__(self, settings: AppSettings | None = None) -> None:
         super().__init__()
         self.settings = settings if settings is not None else load_settings()
+        paa.set_tool(self.settings.image_to_paa)
         self.setObjectName("Root")
         self.setWindowTitle(self.tr("DayZ Texture Tool"))
         self.resize(WINDOW_W, WINDOW_H)

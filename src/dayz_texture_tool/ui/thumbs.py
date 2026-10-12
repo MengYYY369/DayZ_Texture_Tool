@@ -10,12 +10,17 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
 from PySide6.QtGui import QImage, QImageReader, QPixmap
 
+from . import paa
+
 THUMB = 64
 
 
 def read_thumbnail(path: Path, size: int = THUMB) -> QImage | None:
     """只把需要的像素解出来 —— 2048×2048 的图读 64px 就够。"""
-    reader = QImageReader(str(path))
+    source_path = paa.readable(Path(path))
+    if source_path is None:
+        return None
+    reader = QImageReader(str(source_path))
     reader.setAutoTransform(True)
     source = reader.size()
     if source.isValid() and (source.width() > size or source.height() > size):

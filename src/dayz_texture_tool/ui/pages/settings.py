@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -15,30 +13,17 @@ from PySide6.QtWidgets import (
 )
 
 from ...processors.rvmat import RVMAT_VARIANTS
+from .. import paa
 from ..theme import PAGE_PAD
 from ..widgets.toolbar import Combo, Field, Segmented, button
 from .base import BasePage
+from .file_page import parse_suffix_text, suffix_error
 from .game import MODES as GAME_MODES
 from .pbr import OUTPUT_TYPES, PBR_TYPES
-
-SPLIT_RE = re.compile(r"[,\s]+")
 
 MATCH_W = 150
 MODE_W = 300
 SLOT_W = 110
-
-
-def parse_suffix_text(text: str) -> list[str]:
-    """逗号或空格分隔，跟旧界面一个规矩。"""
-    return [part for part in SPLIT_RE.split(text.strip()) if part]
-
-
-def suffix_error(values: list[str]) -> str:
-    if any("." in value for value in values):
-        return "A suffix cannot contain a dot."
-    if len(set(values)) != len(values):
-        return "Two slots share the same suffix."
-    return ""
 
 
 def flex(field: Field, min_width: int = 120) -> Field:
@@ -53,7 +38,6 @@ class SettingsPage(BasePage):
     def __init__(self, settings, parent: QWidget | None = None) -> None:
         super().__init__(self.tr("Settings"), "", parent)
         self.settings = settings
-        self._suffix_fields: list[tuple[Field, list[str]]] = []
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -84,7 +68,6 @@ class SettingsPage(BasePage):
         lay = QVBoxLayout(inner)
         lay.setContentsMargins(PAGE_PAD, 0, PAGE_PAD, 28)
         lay.setSpacing(0)
-        self._suffix_fields = []
         self._build_general(lay)
         self._build_game(lay)
         self._build_pbr(lay)
@@ -183,13 +166,12 @@ class SettingsPage(BasePage):
     def _build_game(self, lay: QVBoxLayout) -> None:
         card = self._section(
             lay,
-            self.tr("Game2PBR · suffix per mode"),
-            self.tr("Which file name suffix selects a mode, and what each output slot is called."),
+            self.tr("Game2PBR · output suffixes"),
+            self.tr("What each output slot is called."),
         )
 
         head = self._row(card, height=34, first=True)
         head.addWidget(self._label(self.tr("Mode"), MODE_W, "MicroMuted"))
-        head.addWidget(self._label(self.tr("Match suffix"), MATCH_W, "MicroMuted"))
         head.addWidget(self._label(self.tr("Output suffixes"), 0, "MicroMuted"))
         head.addStretch(1)
 
@@ -212,11 +194,6 @@ class SettingsPage(BasePage):
         for processor, label, slots in GAME_MODES:
             row = self._row(card, height=64)
             row.addWidget(self._label(QCoreApplication.translate("GamePage", label), MODE_W))
-
-            match = Field(", ".join(self.settings.game_suffixes.get(processor, [])), MATCH_W)
-            match.editingFinished.connect(self._make_match_handler(processor, match))
-            self._suffix_fields.append((match, self.settings.game_suffixes.get(processor, [])))
-            row.addWidget(self._cell("", match), 0, Qt.AlignVCenter)
 
             outputs = self.settings.game_output_suffixes.get(processor, {})
             for slot in slots:
@@ -308,6 +285,7 @@ class SettingsPage(BasePage):
 
     def _on_paa_path(self) -> None:
         self.settings.image_to_paa = self.paa_path.text().strip()
+        paa.set_tool(self.settings.image_to_paa)
         self._save()
 
     def _browse_paa(self) -> None:
@@ -318,20 +296,6 @@ class SettingsPage(BasePage):
             self.paa_path.setText(name)
             self._on_paa_path()
 
-    def _make_match_handler(self, processor: str, field: Field):
-        def handler() -> None:
-            values = parse_suffix_text(field.text())
-            error = suffix_error(values)
-            field.set_invalid(bool(error))
-            if error:
-                self.status.set_status(self.tr(error))
-                return
-            self.settings.game_suffixes[processor] = values
-            self._save()
-            self.status.set_status(self.tr("Settings are saved automatically."))
-
-        return handler
-
     def _make_output_handler(self, processor: str, slot: str, field: Field):
         def handler() -> None:
             table = self.settings.game_output_suffixes.setdefault(processor, {})
@@ -339,7 +303,7 @@ class SettingsPage(BasePage):
             error = suffix_error([value for value in table.values() if value])
             field.set_invalid(bool(error))
             if error:
-                self.status.set_status(self.tr(error))
+                self.status.set_status(QCoreApplication.translate("FilePage", error))
                 return
             self._save()
             self.status.set_status(self.tr("Settings are saved automatically."))

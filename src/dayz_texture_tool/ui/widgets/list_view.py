@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractListModel, QModelIndex, QRect, QSize, Qt, Signal
+from PySide6.QtCore import (
+    QAbstractListModel,
+    QEvent,
+    QModelIndex,
+    QRect,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
@@ -225,6 +233,7 @@ class ItemListView(QWidget):
     files_requested = Signal()
     folder_requested = Signal()
     header_toggled = Signal(bool)
+    remove_requested = Signal()
 
     def __init__(
         self,
@@ -266,6 +275,8 @@ class ItemListView(QWidget):
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setFrameShape(QFrame.NoFrame)
         self.view.setSpacing(0)
+        # 列表本身接不到 Delete —— 键盘事件进的是 QListView 那个子控件
+        self.view.installEventFilter(self)
         self.stack.addWidget(self.view)
 
         self.empty = EmptyState(empty_title, empty_hint, empty_accept)
@@ -278,6 +289,13 @@ class ItemListView(QWidget):
         self.model.modelReset.connect(self._sync)
         self.header.select_all_changed.connect(self.set_all_checked)
         self._sync()
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        if obj is self.view and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Delete:
+                self.remove_requested.emit()
+                return True
+        return super().eventFilter(obj, event)
 
     def _refresh(self, _key: str = "") -> None:
         self.view.viewport().update()

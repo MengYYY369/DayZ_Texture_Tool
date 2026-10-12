@@ -8,7 +8,7 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QImageReader, QPainter, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from .. import theme
+from .. import paa, theme
 from ..icons import icon
 from .toolbar import icon_button
 
@@ -20,7 +20,10 @@ STRIP_THUMB = 46
 
 def read_scaled(path: Path, box_w: int, box_h: int) -> QPixmap | None:
     """按需要的尺寸解码，不整张读进内存。"""
-    reader = QImageReader(str(path))
+    source_path = paa.readable(Path(path))
+    if source_path is None:
+        return None
+    reader = QImageReader(str(source_path))
     size = reader.size()
     if not size.isValid() or size.width() <= 0 or size.height() <= 0:
         return None

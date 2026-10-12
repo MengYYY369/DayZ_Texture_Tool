@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QT_TRANSLATE_NOOP
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
 
 from ...batch import collect_image_files, detect_game2pbr_processor
 from ...models import ProcessingResult
 from ...processors.game2pbr import process_game2pbr
 from ...settings import DEFAULT_GAME_OUTPUT_SUFFIXES, DEFAULT_GAME_SUFFIXES
 from ..items import PENDING, SKIPPED, Item, Slot
-from ..widgets.toolbar import Combo, Segmented, Toggle, ghost_button
-from .file_page import FilePage
+from ..widgets.toolbar import Combo, Field, Segmented, Toggle, ghost_button, labelled
+from .file_page import FilePage, parse_suffix_text, suffix_error
 
 # (处理模式, 下拉里显示的名字, 输出的槽位顺序 —— 顺序必须跟处理器函数返回的顺序一致)
 MODES: list[tuple[str, str, tuple[str, ...]]] = [
@@ -108,14 +108,20 @@ class GamePage(FilePage):
         self.match.set_value(settings.game_match_mode, notify=False)
         self.match.changed.connect(self._on_match)
         self.delete_source = Toggle(self.tr("Delete src"), on=True)
-        self.by_suffix = ghost_button(self.tr("By suffix"))
+        self.suffix_field = Field(" ".join(self.match_suffixes()), 150)
+        self.suffix_field.editingFinished.connect(self._on_suffixes)
+        self.suffix_box = labelled(self.tr("Match suffix"), self.suffix_field)
+        self.by_suffix = ghost_button(self.tr("Select by suffix"))
         self.by_suffix.clicked.connect(self.select_by_suffix)
 
         self.add_toolbar(
-            self.mode_combo, self.match, self.delete_source, self.by_suffix
+            self.mode_combo,
+            self.match,
+            self.delete_source,
+            self.suffix_box,
+            self.by_suffix,
         )
-        self.add_toolbar_stretch()
-        self.add_toolbar(self.add_button)
+        self.add_toolbar_actions()
 
         self.set_empty_text(
             self.tr("Drop textures here"),
@@ -155,6 +161,25 @@ class GamePage(FilePage):
     # ---- 工具条 ----
 
     def _on_mode(self, _value: str) -> None:
+        self._save_settings()
+        self._show_suffixes()
+        self._reclassify()
+        self.list.empty.set_mode(self.mode_text())
+        self.refresh()
+
+    def _show_suffixes(self) -> None:
+        """把当前模式的识别后缀摆进工具条那个框。"""
+        self.suffix_field.set_invalid(False)
+        self.suffix_field.setText(" ".join(self.match_suffixes()))
+
+    def _on_suffixes(self) -> None:
+        values = parse_suffix_text(self.suffix_field.text())
+        error = suffix_error(values)
+        self.suffix_field.set_invalid(bool(error))
+        if error:
+            self.status.set_status(QCoreApplication.translate("FilePage", error))
+            return
+        self.settings.game_suffixes[self.mode()[0]] = values
         self._save_settings()
         self._reclassify()
         self.list.empty.set_mode(self.mode_text())
@@ -265,7 +290,8 @@ class GamePage(FilePage):
         self.title_label.setText(self.tr("Game2PBR"))
         self.status.set_action_text(self.tr("Start"))
         self.delete_source.set_label(self.tr("Delete src"))
-        self.by_suffix.setText(self.tr("By suffix"))
+        self.suffix_box.label.setText(self.tr("Match suffix"))
+        self.by_suffix.setText(self.tr("Select by suffix"))
         self.mode_combo.set_items([(key, self.tr(label)) for key, label, _ in MODES])
         self.match.set_labels([self.tr("Exact"), self.tr("Fuzzy")])
         self.set_empty_text(

@@ -1,6 +1,6 @@
 """一行怎么画，以及每一列在哪。
 
-列：勾选框 | 文件名 | 变换前 | → | 变换后 | 分栏线 | 尺寸/大小 | 状态
+列：勾选框 | 文件名 | 变换前 | → | 变换后 | 分栏线 | 尺寸/大小 | 状态 | 移除
 「变换前」的宽度按页固定（Game2PBR 70 = 1 张，PBR2DayZ 358 = 5 张），
 这样整页里箭头和「变换后」的横坐标是恒定的。
 """
@@ -13,7 +13,7 @@ from PySide6.QtCore import QEvent, QModelIndex, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
-from .. import theme
+from .. import icons, theme
 from ..items import DONE, FAILED, PENDING, RUNNING, SKIPPED
 from ..thumbs import ThumbCache
 from ..theme import PT_BODY, PT_MICRO, PT_SMALL, PT_TINY, ROW_H, THUMB
@@ -23,6 +23,7 @@ TITLE_W = 184
 ARROW_W = 30
 SIZE_W = 142
 STATUS_W = 130
+CLOSE_W = 30
 PAD_L = 12
 PAD_R = 16
 GAP = 16
@@ -56,6 +57,7 @@ class Columns:
     rule: QRect
     size: QRect
     status: QRect
+    close: QRect
 
 
 def columns(width: int, in_width: int) -> Columns:
@@ -68,7 +70,7 @@ def columns(width: int, in_width: int) -> Columns:
     x += in_width
     arrow = QRect(x, 0, ARROW_W, 0)
     x += ARROW_W
-    outputs_w = max(0, width - x - (1 + GAP + SIZE_W + STATUS_W + PAD_R))
+    outputs_w = max(0, width - x - (1 + GAP + SIZE_W + STATUS_W + CLOSE_W + PAD_R))
     outputs = QRect(x, 0, outputs_w, 0)
     x += outputs_w
     rule = QRect(x, 0, 1, 0)
@@ -76,15 +78,16 @@ def columns(width: int, in_width: int) -> Columns:
     size = QRect(x, 0, SIZE_W, 0)
     x += SIZE_W
     status = QRect(x, 0, STATUS_W, 0)
-    return Columns(check, title, inputs, arrow, outputs, rule, size, status)
+    x += STATUS_W
+    close = QRect(x, 0, CLOSE_W, 0)
+    return Columns(check, title, inputs, arrow, outputs, rule, size, status, close)
 
 
 def cell_rects(area: QRect, count: int) -> list[QRect]:
     """把一格里的小图从左往右排。"""
     if count <= 0:
         return []
-    total = count * CELL_W + (count - 1) * CELL_SPACING
-    x = area.x() + max(0, (area.width() - total) // 2)
+    x = area.x()
     rects = []
     for i in range(count):
         rects.append(QRect(x + i * (CELL_W + CELL_SPACING), area.y(), CELL_W, area.height()))
@@ -259,15 +262,17 @@ class RowDelegate(QStyledItemDelegate):
         size_area = QRect(rect.x() + col.size.x(), top, SIZE_W - 10, inner_h)
         painter.setPen(QPen(QColor(t.text_dim if item.selectable else t.text_muted)))
         painter.setFont(_font(PT_SMALL))
+        # PAA 量不出像素尺寸，这时只剩大小一行，把它摆到正中，不然上面空一块
+        top_y = inner_h // 2 - (18 if item.size_top else 6)
         painter.drawText(
-            QRect(size_area.x(), size_area.y() + inner_h // 2 - 18, size_area.width(), 16),
+            QRect(size_area.x(), size_area.y() + top_y, size_area.width(), 16),
             Qt.AlignLeft | Qt.AlignVCenter,
             QFontMetrics(painter.font()).elidedText(item.size_top, Qt.ElideRight, size_area.width()),
         )
         painter.setPen(QPen(QColor(t.text_muted)))
         painter.setFont(_font(PT_TINY))
         painter.drawText(
-            QRect(size_area.x(), size_area.y() + inner_h // 2 + 2, size_area.width(), 14),
+            QRect(size_area.x(), size_area.y() + inner_h // 2 + (2 if item.size_top else 7), size_area.width(), 14),
             Qt.AlignLeft | Qt.AlignVCenter,
             QFontMetrics(painter.font()).elidedText(item.size_bottom, Qt.ElideRight, size_area.width()),
         )
@@ -294,6 +299,16 @@ class RowDelegate(QStyledItemDelegate):
                 Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap,
                 item.status_note,
             )
+
+        # 行末尾的移除叉
+        close_area = QRect(rect.x() + col.close.x(), top, CLOSE_W, inner_h)
+        pixmap = icons.pixmap("close", t.text_muted, 13)
+        ratio = pixmap.devicePixelRatio() or 1.0
+        painter.drawPixmap(
+            int(close_area.center().x() - pixmap.width() / ratio / 2),
+            int(close_area.center().y() - pixmap.height() / ratio / 2),
+            pixmap,
+        )
         painter.restore()
 
     # ------------------------------------------------------------ 交互
@@ -308,6 +323,10 @@ class RowDelegate(QStyledItemDelegate):
         cell_h = 64 + 15 + 12
         cell_y = top + (inner_h - cell_h) // 2
         pos = event.position().toPoint()
+
+        if QRect(rect.x() + col.close.x(), top, CLOSE_W, inner_h).contains(pos):
+            self.slot_clicked.emit(item.key, -3)
+            return True
 
         if QRect(rect.x() + col.check.x(), top, CHECK_W, inner_h).contains(pos) and item.selectable:
             self.slot_clicked.emit(item.key, -2)

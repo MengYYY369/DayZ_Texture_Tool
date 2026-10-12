@@ -5,9 +5,17 @@ Game2PBR / PBR2DayZ / 水印 / SMDI 四页都从这里长出来，只换工具�
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QObject, QRunnable, QThreadPool, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QObject,
+    QRunnable,
+    QT_TRANSLATE_NOOP,
+    QThreadPool,
+    Signal,
+)
 from PySide6.QtGui import QImageReader
 from PySide6.QtWidgets import QFileDialog, QWidget
 
@@ -15,8 +23,24 @@ from ...models import BatchResult, ProcessingResult
 from ..items import DONE, FAILED, RUNNING, SKIPPED, Item, Slot
 from ..widgets.issues_panel import IssuesPanel
 from ..widgets.list_view import ItemListView
-from ..widgets.toolbar import MenuButton
+from ..widgets.toolbar import MenuButton, ghost_button
 from .base import BasePage
+
+SPLIT_RE = re.compile(r"[,\s]+")
+
+
+def parse_suffix_text(text: str) -> list[str]:
+    """逗号或空格分隔，跟旧界面一个规矩。"""
+    return [part for part in SPLIT_RE.split(text.strip()) if part]
+
+
+def suffix_error(values: list[str]) -> str:
+    """检查一组后缀。空串表示没问题，否则是给用户看的原因。"""
+    if any("." in value for value in values):
+        return QT_TRANSLATE_NOOP("FilePage", "A suffix cannot contain a dot.")
+    if len(set(values)) != len(values):
+        return QT_TRANSLATE_NOOP("FilePage", "Two slots share the same suffix.")
+    return ""
 
 
 class WorkerSignals(QObject):
@@ -75,6 +99,7 @@ class FilePage(BasePage):
         self.list.files_requested.connect(self.pick_files)
         self.list.folder_requested.connect(self.pick_folder)
         self.list.slot_clicked.connect(self._on_slot)
+        self.list.remove_requested.connect(self.remove_checked)
         self.set_body(self.list)
 
         self.issues = IssuesPanel()
@@ -87,6 +112,8 @@ class FilePage(BasePage):
                 (self.tr("Add folder"), self.pick_folder),
             ]
         )
+        self.remove_button = ghost_button(self.tr("Remove checked"))
+        self.remove_button.clicked.connect(self.remove_checked)
 
         self.status.action_clicked.connect(self.start)
         self.setAcceptDrops(True)
@@ -105,6 +132,7 @@ class FilePage(BasePage):
         这里不能用 self.tr() —— 它按实例的类名取上下文，GamePage 实例会去找
         GamePage 上下文，而调用点声明的是 QT_TRANSLATE_NOOP("FilePage", ...)。
         """
+        self.remove_button.setText(self.tr("Remove checked"))
         self.add_button.set_label(self.tr("Add"))
         self.add_button.set_items(
             [
@@ -163,9 +191,17 @@ class FilePage(BasePage):
             + " (*.png *.tga *.tif *.tiff *.jpg *.jpeg *.bmp *.dds *.paa)"
         )
 
+    def add_toolbar_actions(self) -> None:
+        """工具条右端收尾：移除 + 添加。五个页面都这么摆。"""
+        self.add_toolbar_stretch()
+        self.add_toolbar(self.remove_button, self.add_button)
+
     def _on_slot(self, key: str, index: int) -> None:
         item = self.item_for(key)
         if item is None:
+            return
+        if index == -3:
+            self.remove_item(key)
             return
         if index == -2:
             if item.selectable:
@@ -194,6 +230,20 @@ class FilePage(BasePage):
         box = getattr(self.window(), "lightbox", None)
         if box is not None:
             box.show_for(item.title, [slot for _, slot in slots], start)
+
+    def remove_item(self, key: str) -> None:
+        self.list.model.remove({key})
+        self._save_session()
+        self.refresh()
+
+    def remove_checked(self) -> None:
+        keys = {item.key for item in self.list.items() if item.checked and item.selectable}
+        if not keys:
+            self.status.set_status(self.tr("Nothing selected."))
+            return
+        self.list.model.remove(keys)
+        self._save_session()
+        self.refresh()
 
     def item_for(self, key: str) -> Item | None:
         """按 key 找行。

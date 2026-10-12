@@ -16,14 +16,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PIL import Image  # noqa: E402
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl  # noqa: E402
-from PySide6.QtGui import QDropEvent  # noqa: E402
+from PySide6.QtGui import QDropEvent, QImageReader, QKeyEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from dayz_texture_tool.models import ProcessingResult  # noqa: E402
 from dayz_texture_tool.settings import AppSettings  # noqa: E402
-from dayz_texture_tool.ui import theme  # noqa: E402
+from dayz_texture_tool.ui import paa, theme  # noqa: E402
 from dayz_texture_tool.ui.items import DONE, FAILED, SKIPPED  # noqa: E402
 from dayz_texture_tool.ui.shell import MainWindow  # noqa: E402
+from dayz_texture_tool.ui.widgets.row import CLOSE_W, PAD_R, columns  # noqa: E402
 
 _app: QApplication | None = None
 
@@ -162,6 +163,112 @@ class ModeTests(WindowCase):
         page.add_paths([make_image(self.root / "c_rgba.png")])
         labels = [slot.label for slot in page.list.items()[0].outputs]
         self.assertEqual(labels, ["R", "G", "B", "A"])
+
+    def test_the_suffix_box_shows_the_current_mode(self) -> None:
+        page = self.page("game")
+        self.assertEqual(page.suffix_field.text(), "_nrm")
+        page.mode_combo.set_value("DF_MRA")
+        pump()
+        self.assertEqual(page.suffix_field.text(), "_mra")
+
+    def test_editing_the_suffix_box_saves_and_reclassifies(self) -> None:
+        page = self.page("game")
+        page.add_paths([make_image(self.root / "thing_albedo.png")])
+        self.assertEqual(page.list.items()[0].status, SKIPPED)
+        page.suffix_field.setText("_albedo")
+        page._on_suffixes()
+        self.assertEqual(self.settings.game_suffixes["DF_NRM"], ["_albedo"])
+        self.assertEqual(page.list.items()[0].status, "pending")
+
+    def test_a_suffix_with_a_dot_is_refused(self) -> None:
+        page = self.page("game")
+        page.suffix_field.setText("_nrm.png")
+        page._on_suffixes()
+        self.assertEqual(self.settings.game_suffixes["DF_NRM"], ["_nrm"])
+        self.assertEqual(page.suffix_field.property("invalid"), "true")
+
+
+class RemoveTests(WindowCase):
+    def _add(self, page, *names: str) -> None:
+        page.add_paths([make_image(self.root / name) for name in names])
+
+    def test_the_close_column_is_flush_with_the_right_edge(self) -> None:
+        col = columns(1000, 70)
+        self.assertGreater(col.close.x(), col.status.x())
+        self.assertEqual(col.close.x() + CLOSE_W + PAD_R, 1000)
+
+    def test_the_row_button_removes_only_that_row(self) -> None:
+        page = self.page("game")
+        self._add(page, "a_nrm.png", "b_nrm.png")
+        page._on_slot(str(self.root / "a_nrm.png"), -3)
+        self.assertEqual([item.title for item in page.list.items()], ["b_nrm.png"])
+
+    def test_remove_checked_only_takes_the_ticked_rows(self) -> None:
+        page = self.page("game")
+        self._add(page, "a_nrm.png", "b_nrm.png", "c_nrm.png")
+        page.list.items()[1].checked = False  # 中间那行没勾，它该留下来
+        page.remove_checked()
+        self.assertEqual([item.title for item in page.list.items()], ["b_nrm.png"])
+
+    def test_delete_key_removes_the_ticked_rows(self) -> None:
+        page = self.page("game")
+        self._add(page, "a_nrm.png", "b_nrm.png")
+        page.list.items()[0].checked = False  # 只留第一行
+        QApplication.sendEvent(
+            page.list.view,
+            QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key_Delete, Qt.NoModifier),
+        )
+        self.assertEqual([item.title for item in page.list.items()], ["a_nrm.png"])
+
+    def test_removing_the_last_row_falls_back_to_the_empty_state(self) -> None:
+        page = self.page("game")
+        self._add(page, "a_nrm.png")
+        page.remove_checked()
+        self.assertEqual(len(page.list.items()), 0)
+        self.assertFalse(page.list.empty.isHidden())
+
+    def test_remove_checked_with_nothing_ticked_says_so(self) -> None:
+        page = self.page("game")
+        self._add(page, "a_nrm.png")
+        page.list.items()[0].checked = False
+        page.remove_checked()
+        self.assertEqual(len(page.list.items()), 1)
+        self.assertIn("Nothing selected", page.status._status.text())
+
+
+class PaaPreviewTests(unittest.TestCase):
+    """PAA 解成 PNG 这条路。不建窗口，只测 paa 模块本身。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        paa.set_tool("")
+        self.addCleanup(paa.set_tool, "")
+
+    def _fake_paa(self) -> Path:
+        path = self.root / "armor_co.paa"
+        path.write_bytes(b"not really a paa")
+        return path
+
+    def test_other_formats_are_returned_as_they_are(self) -> None:
+        path = make_image(self.root / "a.png")
+        self.assertEqual(paa.readable(path), path)
+
+    def test_without_the_tool_a_paa_cannot_be_previewed(self) -> None:
+        self.assertIsNone(paa.readable(self._fake_paa()))
+
+    def test_the_tool_decodes_a_paa_into_a_readable_file(self) -> None:
+        source = make_image(self.root / "decoded.png")
+        tool = self.root / "fake_tool.cmd"
+        tool.write_text(
+            f'@echo off\r\ncopy /y "{source}" "%~2" >nul\r\n', encoding="ascii"
+        )
+        paa.set_tool(tool)
+        decoded = paa.readable(self._fake_paa())
+        self.assertIsNotNone(decoded)
+        self.assertTrue(decoded.exists())
+        self.assertFalse(QImageReader(str(decoded)).read().isNull())
 
 
 class RunTests(WindowCase):

@@ -144,7 +144,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 .venv\Scripts\python -m unittest discover -s tests
 ```
 
-143 个用例：69 个覆盖处理逻辑，74 个覆盖界面。
+155 个用例：112 个覆盖处理逻辑，43 个覆盖界面。
 
 处理层（`processors/`、`batch.py`、`models.py`、`settings.py`）不依赖界面，可以单独导入和测试。界面测试通过 Qt 的 `offscreen` 插件无头运行。
 

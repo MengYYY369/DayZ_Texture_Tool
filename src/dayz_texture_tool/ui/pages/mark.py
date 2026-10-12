@@ -62,8 +62,7 @@ class MarkPage(FilePage):
             self._length_box,
             self.overwrite,
         )
-        self.add_toolbar_stretch()
-        self.add_toolbar(self.add_button)
+        self.add_toolbar_actions()
 
         self.set_empty_text(
             self.tr("Drop images here"),
