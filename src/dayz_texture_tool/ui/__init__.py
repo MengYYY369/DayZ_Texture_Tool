@@ -1,3 +1,3 @@
-from .main_window import DayZTextureToolApp
+from .shell import MainWindow
 
-__all__ = ["DayZTextureToolApp"]
+__all__ = ["MainWindow"]

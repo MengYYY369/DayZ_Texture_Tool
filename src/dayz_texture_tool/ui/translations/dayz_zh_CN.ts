@@ -19,175 +19,197 @@
 <context>
     <name>FilePage</name>
     <message>
-        <location filename="../pages/file_page.py" line="79"/>
-        <source>＋ Add ▾</source>
-        <translation>＋ 添加 ▾</translation>
+        <location filename="../pages/file_page.py" line="83"/>
+        <location filename="../pages/file_page.py" line="108"/>
+        <source>Add</source>
+        <translation>添加</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="81"/>
-        <location filename="../pages/file_page.py" line="125"/>
+        <location filename="../pages/file_page.py" line="86"/>
+        <location filename="../pages/file_page.py" line="111"/>
+        <location filename="../pages/file_page.py" line="150"/>
         <source>Add files</source>
         <translation>添加文件</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="82"/>
-        <location filename="../pages/file_page.py" line="130"/>
+        <location filename="../pages/file_page.py" line="87"/>
+        <location filename="../pages/file_page.py" line="112"/>
+        <location filename="../pages/file_page.py" line="156"/>
         <source>Add folder</source>
         <translation>添加文件夹</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="110"/>
+        <location filename="../pages/file_page.py" line="134"/>
         <source>file(s)</source>
         <translation>个文件</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="139"/>
+        <location filename="../pages/file_page.py" line="162"/>
         <source>Images</source>
         <translation>图片</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="194"/>
+        <location filename="../pages/file_page.py" line="227"/>
         <source>Nothing selected.</source>
         <translation>没有选择任何图片。</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="249"/>
+        <location filename="../pages/file_page.py" line="289"/>
         <source>Working...</source>
         <translation>处理中…</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="252"/>
+        <location filename="../pages/file_page.py" line="292"/>
         <source>{done} done · {failed} failed · {skipped} skipped</source>
         <translation>完成 {done} · 失败 {failed} · 跳过 {skipped}</translation>
     </message>
     <message>
-        <location filename="../pages/file_page.py" line="256"/>
+        <location filename="../pages/file_page.py" line="298"/>
         <source>{total} {unit} ready</source>
         <translation>{total} {unit}待处理</translation>
+    </message>
+    <message>
+        <location filename="../pages/game.py" line="92"/>
+        <location filename="../pages/mark.py" line="27"/>
+        <location filename="../pages/rvmat.py" line="31"/>
+        <location filename="../pages/smdi.py" line="25"/>
+        <source>Source</source>
+        <translation>原图</translation>
+    </message>
+    <message>
+        <location filename="../pages/game.py" line="93"/>
+        <location filename="../pages/smdi.py" line="26"/>
+        <source>Output</source>
+        <translation>输出</translation>
+    </message>
+    <message>
+        <location filename="../pages/mark.py" line="28"/>
+        <source>Result</source>
+        <translation>结果</translation>
+    </message>
+    <message>
+        <location filename="../pages/pbr.py" line="61"/>
+        <source>Source · 5 per group</source>
+        <translation>原图 · 每组 5 张</translation>
+    </message>
+    <message>
+        <location filename="../pages/pbr.py" line="62"/>
+        <source>Output · up to 4</source>
+        <translation>输出 · 最多 4 张</translation>
+    </message>
+    <message>
+        <location filename="../pages/rvmat.py" line="32"/>
+        <source>Variants</source>
+        <translation>变体</translation>
     </message>
 </context>
 <context>
     <name>GamePage</name>
     <message>
-        <location filename="../pages/game.py" line="19"/>
+        <location filename="../pages/game.py" line="21"/>
         <source>Delta Force NRM mode (3 outputs)</source>
         <translation>三角洲行动 NRM 贴图处理模式（输出 3 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="20"/>
+        <location filename="../pages/game.py" line="26"/>
         <source>Delta Force MRA mode (3 outputs)</source>
         <translation>三角洲行动 MRA 贴图处理模式（输出 3 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="21"/>
+        <location filename="../pages/game.py" line="31"/>
         <source>Arena Breakout ORN mode (3 outputs)</source>
         <translation>暗区突围无限 ORN 贴图处理模式（输出 3 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="22"/>
+        <location filename="../pages/game.py" line="36"/>
         <source>Split color and alpha (2 outputs)</source>
         <translation>颜色与透明通道拆分模式（输出 2 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="23"/>
+        <location filename="../pages/game.py" line="41"/>
         <source>Split RGBA channels (4 outputs)</source>
         <translation>RGBA 四通道拆分模式（输出 4 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="24"/>
+        <location filename="../pages/game.py" line="46"/>
         <source>Merge RGB and alpha (1 output)</source>
         <translation>RGB 与透明通道合并模式（输出 1 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="25"/>
+        <location filename="../pages/game.py" line="51"/>
         <source>Rebuild XY normal map (1 output)</source>
         <translation>XY 法线贴图重建模式（输出 1 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="26"/>
-        <source>Convert format only (1 output)</source>
+        <location filename="../pages/game.py" line="56"/>
+        <source>Direct convert mode (1 output)</source>
         <translation>直接格式转换模式（输出 1 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="27"/>
-        <source>Invert channels (1 output)</source>
+        <location filename="../pages/game.py" line="61"/>
+        <source>Direct invert mode (1 output)</source>
         <translation>直接反相处理模式（输出 1 张）</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="65"/>
-        <location filename="../pages/game.py" line="206"/>
+        <location filename="../pages/game.py" line="104"/>
+        <location filename="../pages/game.py" line="270"/>
         <source>Exact</source>
         <translation>精准匹配</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="65"/>
-        <location filename="../pages/game.py" line="206"/>
+        <location filename="../pages/game.py" line="104"/>
+        <location filename="../pages/game.py" line="270"/>
         <source>Fuzzy</source>
         <translation>模糊匹配</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="68"/>
-        <location filename="../pages/game.py" line="200"/>
+        <location filename="../pages/game.py" line="110"/>
+        <location filename="../pages/game.py" line="267"/>
         <source>Delete src</source>
         <translation>删除原图</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="69"/>
-        <location filename="../pages/game.py" line="201"/>
+        <location filename="../pages/game.py" line="111"/>
+        <location filename="../pages/game.py" line="268"/>
         <source>By suffix</source>
         <translation>按后缀全选</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="76"/>
-        <location filename="../pages/game.py" line="208"/>
+        <location filename="../pages/game.py" line="121"/>
+        <location filename="../pages/game.py" line="272"/>
         <source>Drop textures here</source>
         <translation>把贴图拖到这里</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="76"/>
-        <location filename="../pages/game.py" line="209"/>
+        <location filename="../pages/game.py" line="123"/>
+        <location filename="../pages/game.py" line="274"/>
         <source>A whole folder works too — files are grouped by the suffix you pick.</source>
         <translation>整个文件夹也可以直接拖进来，会按你选的后缀识别。</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="96"/>
+        <location filename="../pages/game.py" line="150"/>
         <source>Mode: {mode} · matches {suffixes}</source>
         <translation>当前模式：{mode} · 识别后缀 {suffixes}</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="152"/>
+        <location filename="../pages/game.py" line="214"/>
         <source>Source</source>
         <translation>原图</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="162"/>
+        <location filename="../pages/game.py" line="228"/>
         <source>Name doesn&apos;t match this mode&apos;s suffix.</source>
         <translation>文件名不符合这个模式的识别后缀。</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="198"/>
+        <location filename="../pages/game.py" line="265"/>
         <source>Game2PBR</source>
         <translation>Game2PBR</translation>
     </message>
     <message>
-        <location filename="../pages/game.py" line="199"/>
+        <location filename="../pages/game.py" line="266"/>
         <source>Start</source>
         <translation>开始处理</translation>
-    </message>
-    <message>
-        <location filename="../pages/game.py" line="202"/>
-        <source>＋ Add ▾</source>
-        <translation>＋ 添加 ▾</translation>
-    </message>
-    <message>
-        <location filename="../pages/game.py" line="203"/>
-        <source>Add files</source>
-        <translation>添加文件</translation>
-    </message>
-    <message>
-        <location filename="../pages/game.py" line="204"/>
-        <source>Add folder</source>
-        <translation>添加文件夹</translation>
     </message>
 </context>
 <context>
@@ -274,113 +296,98 @@
 <context>
     <name>MarkPage</name>
     <message>
-        <location filename="../pages/mark.py" line="35"/>
-        <location filename="../pages/mark.py" line="187"/>
+        <location filename="../pages/mark.py" line="36"/>
+        <location filename="../pages/mark.py" line="202"/>
         <source>Embed</source>
         <translation>嵌入</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="35"/>
-        <location filename="../pages/mark.py" line="187"/>
+        <location filename="../pages/mark.py" line="36"/>
+        <location filename="../pages/mark.py" line="202"/>
         <source>Detect</source>
         <translation>检测</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="40"/>
-        <location filename="../pages/mark.py" line="191"/>
+        <location filename="../pages/mark.py" line="43"/>
+        <location filename="../pages/mark.py" line="206"/>
         <source>Watermark text</source>
         <translation>水印文字</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="49"/>
-        <location filename="../pages/mark.py" line="192"/>
+        <location filename="../pages/mark.py" line="52"/>
+        <location filename="../pages/mark.py" line="207"/>
         <source>Overwrite</source>
         <translation>覆盖原图</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="51"/>
-        <location filename="../pages/mark.py" line="188"/>
+        <location filename="../pages/mark.py" line="54"/>
+        <location filename="../pages/mark.py" line="203"/>
         <source>Content</source>
         <translation>内容</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="52"/>
-        <location filename="../pages/mark.py" line="189"/>
+        <location filename="../pages/mark.py" line="55"/>
+        <location filename="../pages/mark.py" line="204"/>
         <source>Password</source>
         <translation>密码</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="53"/>
-        <location filename="../pages/mark.py" line="190"/>
+        <location filename="../pages/mark.py" line="56"/>
+        <location filename="../pages/mark.py" line="205"/>
         <source>Length</source>
         <translation>长度</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="66"/>
-        <location filename="../pages/mark.py" line="197"/>
+        <location filename="../pages/mark.py" line="69"/>
+        <location filename="../pages/mark.py" line="209"/>
         <source>Drop images here</source>
         <translation>把图片拖到这里</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="67"/>
-        <location filename="../pages/mark.py" line="198"/>
+        <location filename="../pages/mark.py" line="71"/>
+        <location filename="../pages/mark.py" line="211"/>
         <source>A watermark is invisible, so the result column reports what happened.</source>
         <translation>盲水印处理前后肉眼完全一样，所以右边那栏显示的是结果。</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="116"/>
+        <location filename="../pages/mark.py" line="121"/>
         <source>Detect · password {password} · length {length}</source>
         <translation>检测 · 密码 {password} · 长度 {length}</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="119"/>
+        <location filename="../pages/mark.py" line="125"/>
         <source>Embed · {count} character(s)</source>
         <translation>嵌入 · {count} 个字符</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="146"/>
+        <location filename="../pages/mark.py" line="154"/>
         <source>Working…</source>
         <translation>处理中…</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="175"/>
+        <location filename="../pages/mark.py" line="186"/>
         <source>Detected: {text}</source>
         <translation>检测到：{text}</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="175"/>
+        <location filename="../pages/mark.py" line="188"/>
         <source>No watermark found</source>
         <translation>没有检测到水印</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="177"/>
+        <location filename="../pages/mark.py" line="191"/>
         <source>Watermark embedded</source>
         <translation>已嵌入水印</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="185"/>
+        <location filename="../pages/mark.py" line="200"/>
         <source>Watermark</source>
         <translation>水印</translation>
     </message>
     <message>
-        <location filename="../pages/mark.py" line="186"/>
+        <location filename="../pages/mark.py" line="201"/>
         <source>Start</source>
         <translation>开始处理</translation>
-    </message>
-    <message>
-        <location filename="../pages/mark.py" line="193"/>
-        <source>＋ Add ▾</source>
-        <translation>＋ 添加 ▾</translation>
-    </message>
-    <message>
-        <location filename="../pages/mark.py" line="194"/>
-        <source>Add files</source>
-        <translation>添加文件</translation>
-    </message>
-    <message>
-        <location filename="../pages/mark.py" line="195"/>
-        <source>Add folder</source>
-        <translation>添加文件夹</translation>
     </message>
 </context>
 <context>
@@ -392,8 +399,8 @@
     </message>
     <message>
         <location filename="../pages/pbr.py" line="28"/>
-        <location filename="../pages/pbr.py" line="88"/>
-        <location filename="../pages/pbr.py" line="280"/>
+        <location filename="../pages/pbr.py" line="100"/>
+        <location filename="../pages/pbr.py" line="311"/>
         <source>Normal</source>
         <translation>法线</translation>
     </message>
@@ -458,360 +465,330 @@
         <translation>前缀：固定前缀</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="74"/>
-        <location filename="../pages/pbr.py" line="291"/>
+        <location filename="../pages/pbr.py" line="76"/>
+        <location filename="../pages/pbr.py" line="323"/>
         <source>Auto</source>
         <translation>自动</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="78"/>
-        <location filename="../pages/pbr.py" line="288"/>
+        <location filename="../pages/pbr.py" line="86"/>
+        <location filename="../pages/pbr.py" line="316"/>
         <source>Custom prefix</source>
         <translation>自定义前缀</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="80"/>
-        <location filename="../pages/pbr.py" line="290"/>
+        <location filename="../pages/pbr.py" line="89"/>
+        <location filename="../pages/pbr.py" line="320"/>
         <source>Exact</source>
         <translation>精准匹配</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="80"/>
-        <location filename="../pages/pbr.py" line="290"/>
+        <location filename="../pages/pbr.py" line="89"/>
+        <location filename="../pages/pbr.py" line="320"/>
         <source>Fuzzy</source>
         <translation>模糊匹配</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="84"/>
-        <location filename="../pages/pbr.py" line="282"/>
+        <location filename="../pages/pbr.py" line="96"/>
+        <location filename="../pages/pbr.py" line="313"/>
         <source>PAA</source>
         <translation>PAA</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="85"/>
-        <location filename="../pages/pbr.py" line="283"/>
+        <location filename="../pages/pbr.py" line="97"/>
+        <location filename="../pages/pbr.py" line="314"/>
         <source>Watermark</source>
         <translation>水印</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="86"/>
-        <location filename="../pages/pbr.py" line="284"/>
+        <location filename="../pages/pbr.py" line="98"/>
+        <location filename="../pages/pbr.py" line="315"/>
         <source>Delete src</source>
         <translation>删除原图</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="89"/>
-        <location filename="../pages/pbr.py" line="281"/>
+        <location filename="../pages/pbr.py" line="101"/>
+        <location filename="../pages/pbr.py" line="312"/>
         <source>Resolution</source>
         <translation>分辨率</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="104"/>
-        <location filename="../pages/pbr.py" line="293"/>
+        <location filename="../pages/pbr.py" line="116"/>
+        <location filename="../pages/pbr.py" line="328"/>
         <source>Drop PBR texture sets here</source>
         <translation>把 PBR 贴图拖到这里</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="105"/>
-        <location filename="../pages/pbr.py" line="294"/>
+        <location filename="../pages/pbr.py" line="117"/>
+        <location filename="../pages/pbr.py" line="329"/>
         <source>Files in the same folder that share a prefix become one group.</source>
         <translation>同一个文件夹里前缀相同的贴图会归成一组，一组最多出 4 张。</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="140"/>
+        <location filename="../pages/pbr.py" line="152"/>
         <source>group(s)</source>
         <translation>组</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="143"/>
+        <location filename="../pages/pbr.py" line="155"/>
         <source>Grouped by folder + prefix · {count} group(s)</source>
         <translation>按文件夹 + 前缀分组 · {count} 组</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="217"/>
+        <location filename="../pages/pbr.py" line="241"/>
         <source>Skipped: no convertible textures.</source>
         <translation>已跳过：没有可转换的贴图。</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="233"/>
+        <location filename="../pages/pbr.py" line="258"/>
         <source>Group is gone.</source>
         <translation>这一组已经不在了。</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="278"/>
+        <location filename="../pages/pbr.py" line="309"/>
         <source>PBR2DayZ</source>
         <translation>PBR2DayZ</translation>
     </message>
     <message>
-        <location filename="../pages/pbr.py" line="279"/>
+        <location filename="../pages/pbr.py" line="310"/>
         <source>Start</source>
         <translation>开始处理</translation>
-    </message>
-    <message>
-        <location filename="../pages/pbr.py" line="285"/>
-        <source>＋ Add ▾</source>
-        <translation>＋ 添加 ▾</translation>
-    </message>
-    <message>
-        <location filename="../pages/pbr.py" line="286"/>
-        <source>Add files</source>
-        <translation>添加文件</translation>
-    </message>
-    <message>
-        <location filename="../pages/pbr.py" line="287"/>
-        <source>Add folder</source>
-        <translation>添加文件夹</translation>
     </message>
 </context>
 <context>
     <name>RvmatPage</name>
     <message>
-        <location filename="../pages/rvmat.py" line="44"/>
-        <location filename="../pages/rvmat.py" line="162"/>
+        <location filename="../pages/rvmat.py" line="49"/>
+        <location filename="../pages/rvmat.py" line="165"/>
         <source>Drop .rvmat materials here</source>
         <translation>把 .rvmat 材质拖进来</translation>
     </message>
     <message>
-        <location filename="../pages/rvmat.py" line="45"/>
-        <location filename="../pages/rvmat.py" line="163"/>
+        <location filename="../pages/rvmat.py" line="50"/>
+        <location filename="../pages/rvmat.py" line="166"/>
         <source>Each material gets a _worn, _damage and _destruct copy.</source>
         <translation>每份材质会复制出 _worn、_damage、_destruct 三份。</translation>
     </message>
     <message>
-        <location filename="../pages/rvmat.py" line="81"/>
+        <location filename="../pages/rvmat.py" line="86"/>
         <source>Variants: {list}</source>
         <translation>变体：{list}</translation>
     </message>
     <message>
-        <location filename="../pages/rvmat.py" line="84"/>
-        <location filename="../pages/rvmat.py" line="156"/>
+        <location filename="../pages/rvmat.py" line="89"/>
+        <location filename="../pages/rvmat.py" line="162"/>
         <source>RVMAT</source>
         <translation>RVMAT</translation>
     </message>
     <message>
-        <location filename="../pages/rvmat.py" line="103"/>
+        <location filename="../pages/rvmat.py" line="108"/>
         <source>Already a {suffix} variant.</source>
         <translation>已经是 {suffix} 变体了。</translation>
     </message>
     <message>
-        <location filename="../pages/rvmat.py" line="157"/>
+        <location filename="../pages/rvmat.py" line="163"/>
         <source>Start</source>
         <translation>开始处理</translation>
-    </message>
-    <message>
-        <location filename="../pages/rvmat.py" line="158"/>
-        <source>＋ Add ▾</source>
-        <translation>＋ 添加 ▾</translation>
-    </message>
-    <message>
-        <location filename="../pages/rvmat.py" line="159"/>
-        <source>Add files</source>
-        <translation>添加文件</translation>
-    </message>
-    <message>
-        <location filename="../pages/rvmat.py" line="160"/>
-        <source>Add folder</source>
-        <translation>添加文件夹</translation>
     </message>
 </context>
 <context>
     <name>SettingsPage</name>
     <message>
         <location filename="../pages/settings.py" line="54"/>
-        <location filename="../pages/settings.py" line="378"/>
+        <location filename="../pages/settings.py" line="380"/>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
     <message>
         <location filename="../pages/settings.py" line="78"/>
-        <location filename="../pages/settings.py" line="329"/>
-        <location filename="../pages/settings.py" line="343"/>
-        <location filename="../pages/settings.py" line="379"/>
+        <location filename="../pages/settings.py" line="331"/>
+        <location filename="../pages/settings.py" line="345"/>
+        <location filename="../pages/settings.py" line="381"/>
         <source>Settings are saved automatically.</source>
         <translation>设置已自动保存</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="137"/>
+        <location filename="../pages/settings.py" line="151"/>
         <source>General</source>
         <translation>通用</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="140"/>
+        <location filename="../pages/settings.py" line="154"/>
         <source>Interface language</source>
         <translation>界面语言</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="148"/>
+        <location filename="../pages/settings.py" line="162"/>
         <source>Theme</source>
         <translation>主题</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="150"/>
+        <location filename="../pages/settings.py" line="164"/>
         <source>Dark</source>
         <translation>深色</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="150"/>
+        <location filename="../pages/settings.py" line="164"/>
         <source>Light</source>
         <translation>浅色</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="159"/>
-        <location filename="../pages/settings.py" line="313"/>
+        <location filename="../pages/settings.py" line="173"/>
+        <location filename="../pages/settings.py" line="315"/>
         <source>ImageToPAA path</source>
         <translation>ImageToPAA 路径</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="163"/>
+        <location filename="../pages/settings.py" line="177"/>
         <source>Browse…</source>
         <translation>浏览…</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="172"/>
+        <location filename="../pages/settings.py" line="186"/>
         <source>Game2PBR · suffix per mode</source>
         <translation>Game2PBR · 各处理模式的后缀</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="173"/>
+        <location filename="../pages/settings.py" line="187"/>
         <source>Which file name suffix selects a mode, and what each output slot is called.</source>
         <translation>文件名带哪个后缀就用哪个模式，以及每种输出叫什么名字。</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="177"/>
+        <location filename="../pages/settings.py" line="191"/>
         <source>Mode</source>
         <translation>处理模式</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="178"/>
+        <location filename="../pages/settings.py" line="192"/>
         <source>Match suffix</source>
         <translation>识别后缀</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="179"/>
-        <location filename="../pages/settings.py" line="251"/>
+        <location filename="../pages/settings.py" line="193"/>
+        <location filename="../pages/settings.py" line="259"/>
         <source>Output suffixes</source>
         <translation>生成贴图后缀</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="183"/>
+        <location filename="../pages/settings.py" line="197"/>
         <source>Metal</source>
         <translation>金属</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="184"/>
+        <location filename="../pages/settings.py" line="198"/>
         <source>Rough</source>
         <translation>粗糙</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="185"/>
-        <location filename="../pages/settings.py" line="231"/>
-        <location filename="../pages/settings.py" line="238"/>
+        <location filename="../pages/settings.py" line="199"/>
+        <location filename="../pages/settings.py" line="239"/>
+        <location filename="../pages/settings.py" line="246"/>
         <source>Normal</source>
         <translation>法线</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="186"/>
-        <location filename="../pages/settings.py" line="234"/>
+        <location filename="../pages/settings.py" line="200"/>
+        <location filename="../pages/settings.py" line="242"/>
         <source>AO</source>
         <translation>AO</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="187"/>
+        <location filename="../pages/settings.py" line="201"/>
         <source>RGB</source>
         <translation>RGB</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="188"/>
+        <location filename="../pages/settings.py" line="202"/>
         <source>Alpha</source>
         <translation>透明</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="189"/>
+        <location filename="../pages/settings.py" line="203"/>
         <source>R</source>
         <translation>红</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="190"/>
+        <location filename="../pages/settings.py" line="204"/>
         <source>G</source>
         <translation>绿</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="191"/>
+        <location filename="../pages/settings.py" line="205"/>
         <source>B</source>
         <translation>蓝</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="192"/>
+        <location filename="../pages/settings.py" line="206"/>
         <source>A</source>
         <translation>透明</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="193"/>
+        <location filename="../pages/settings.py" line="207"/>
         <source>Merged</source>
         <translation>合并</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="194"/>
+        <location filename="../pages/settings.py" line="208"/>
         <source>Converted</source>
         <translation>转换</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="195"/>
+        <location filename="../pages/settings.py" line="209"/>
         <source>Inverted</source>
         <translation>反相</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="225"/>
+        <location filename="../pages/settings.py" line="233"/>
         <source>PBR2DayZ · group keywords and output suffixes</source>
         <translation>PBR2DayZ · 成组关键词与输出后缀</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="226"/>
+        <location filename="../pages/settings.py" line="234"/>
         <source>Used to tell which PBR slot a file belongs to.</source>
         <translation>用来判断一张贴图属于 PBR 的哪一类。</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="230"/>
+        <location filename="../pages/settings.py" line="238"/>
         <source>Base color</source>
         <translation>颜色</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="232"/>
+        <location filename="../pages/settings.py" line="240"/>
         <source>Roughness</source>
         <translation>粗糙度</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="233"/>
+        <location filename="../pages/settings.py" line="241"/>
         <source>Metallic</source>
         <translation>金属度</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="237"/>
+        <location filename="../pages/settings.py" line="245"/>
         <source>Color</source>
         <translation>颜色</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="239"/>
+        <location filename="../pages/settings.py" line="247"/>
         <source>Specular</source>
         <translation>高光</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="240"/>
+        <location filename="../pages/settings.py" line="248"/>
         <source>Ambient</source>
         <translation>环境光</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="269"/>
+        <location filename="../pages/settings.py" line="271"/>
         <source>RVMAT</source>
         <translation>RVMAT</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="270"/>
+        <location filename="../pages/settings.py" line="272"/>
         <source>Every generated variant points class Stage3 at one of these textures.</source>
         <translation>生成的每个变体都把 class Stage3 指向这几张贴图之一。</translation>
     </message>
     <message>
-        <location filename="../pages/settings.py" line="281"/>
+        <location filename="../pages/settings.py" line="283"/>
         <source>Skip suffixes</source>
         <translation>跳过后缀</translation>
     </message>
@@ -870,58 +847,43 @@
 <context>
     <name>SmdiPage</name>
     <message>
-        <location filename="../pages/smdi.py" line="33"/>
-        <location filename="../pages/smdi.py" line="92"/>
+        <location filename="../pages/smdi.py" line="35"/>
+        <location filename="../pages/smdi.py" line="99"/>
         <source>PAA</source>
         <translation>PAA</translation>
     </message>
     <message>
-        <location filename="../pages/smdi.py" line="34"/>
-        <location filename="../pages/smdi.py" line="91"/>
+        <location filename="../pages/smdi.py" line="36"/>
+        <location filename="../pages/smdi.py" line="98"/>
         <source>Specular</source>
         <translation>高光强度</translation>
     </message>
     <message>
-        <location filename="../pages/smdi.py" line="41"/>
-        <location filename="../pages/smdi.py" line="97"/>
+        <location filename="../pages/smdi.py" line="43"/>
+        <location filename="../pages/smdi.py" line="101"/>
         <source>Drop color textures here</source>
         <translation>把颜色贴图拖到这里</translation>
     </message>
     <message>
-        <location filename="../pages/smdi.py" line="42"/>
-        <location filename="../pages/smdi.py" line="98"/>
+        <location filename="../pages/smdi.py" line="44"/>
+        <location filename="../pages/smdi.py" line="102"/>
         <source>Each image turns into one SMDI specular map.</source>
         <translation>一张颜色贴图生成一张 SMDI 高光图。</translation>
     </message>
     <message>
-        <location filename="../pages/smdi.py" line="55"/>
+        <location filename="../pages/smdi.py" line="57"/>
         <source>Specular power {power:g}</source>
         <translation>高光强度 {power:g}</translation>
     </message>
     <message>
-        <location filename="../pages/smdi.py" line="89"/>
+        <location filename="../pages/smdi.py" line="96"/>
         <source>SMDI</source>
         <translation>SMDI</translation>
     </message>
     <message>
-        <location filename="../pages/smdi.py" line="90"/>
+        <location filename="../pages/smdi.py" line="97"/>
         <source>Start</source>
         <translation>开始处理</translation>
-    </message>
-    <message>
-        <location filename="../pages/smdi.py" line="93"/>
-        <source>＋ Add ▾</source>
-        <translation>＋ 添加 ▾</translation>
-    </message>
-    <message>
-        <location filename="../pages/smdi.py" line="94"/>
-        <source>Add files</source>
-        <translation>添加文件</translation>
-    </message>
-    <message>
-        <location filename="../pages/smdi.py" line="95"/>
-        <source>Add folder</source>
-        <translation>添加文件夹</translation>
     </message>
 </context>
 </TS>

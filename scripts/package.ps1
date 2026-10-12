@@ -11,6 +11,9 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Spec = Join-Path $Root "DayZ_Texture_Tool.spec"
 $DistDir = Join-Path $Root "dist"
 $BuildDir = Join-Path $Root "build"
+# PyInstaller's temp dir lives one level down, in build\pyi.
+# build\ also holds screenshots and scratch scripts, so we must not wipe all of it.
+$WorkDir = Join-Path $BuildDir "pyi"
 $ReleaseDir = Join-Path $Root "release"
 $VenvDir = Join-Path $Root ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
@@ -108,14 +111,14 @@ if (!$SkipTests) {
 }
 
 if (!$NoClean) {
-    Remove-Item -LiteralPath $BuildDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $DistDir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $ReleaseDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 
-Run-Python -Title "Build executable" -PyArgs @("-m", "PyInstaller", $Spec, "--clean", "-y")
+Run-Python -Title "Build executable" -PyArgs @("-m", "PyInstaller", $Spec, "--clean", "-y", "--workpath", $WorkDir)
 
 if (!(Test-Path -LiteralPath $AppDist)) {
     throw "Build output was not found: $AppDist"

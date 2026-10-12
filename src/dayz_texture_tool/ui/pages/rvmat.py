@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QUrl
 from PySide6.QtGui import QDesktopServices
 
 from ...models import ProcessingResult
-from ...processors.rvmat import RVMAT_VARIANTS, collect_rvmat_files, convert_rvmat, excluded_variant
+from ...processors.rvmat import (
+    RVMAT_VARIANTS,
+    collect_rvmat_files,
+    convert_rvmat,
+    excluded_variant,
+)
 from ..items import PENDING, SKIPPED, Item, Slot
 from ..widgets.toolbar import Toggle
 from .file_page import FilePage
@@ -23,8 +28,8 @@ class RvmatPage(FilePage):
             title="RVMAT",
             action_text="Start",
             in_width=70,
-            in_label="Source",
-            out_label="Variants",
+            in_label=QT_TRANSLATE_NOOP("FilePage", "Source"),
+            out_label=QT_TRANSLATE_NOOP("FilePage", "Variants"),
             empty_title="Drop .rvmat materials here",
             empty_hint="Each material gets a _worn, _damage and _destruct copy.",
             empty_accept="RVMAT",
@@ -153,11 +158,9 @@ class RvmatPage(FilePage):
     # ---- 语言 ----
 
     def retranslate(self) -> None:
+        super().retranslate()
         self.title_label.setText(self.tr("RVMAT"))
         self.status.set_action_text(self.tr("Start"))
-        self.add_button.setText(self.tr("＋ Add ▾"))
-        self._add_files_action.setText(self.tr("Add files"))
-        self._add_folder_action.setText(self.tr("Add folder"))
         self.set_empty_text(
             self.tr("Drop .rvmat materials here"),
             self.tr("Each material gets a _worn, _damage and _destruct copy."),

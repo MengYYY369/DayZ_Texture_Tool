@@ -102,7 +102,7 @@ def _filename_prefix(filename: str, keyword: str, match_mode: str) -> str:
     return stem
 
 
-def _scan_pbr_paths(paths: list[Path], root: Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
+def scan_pbr_paths(paths: list[Path], root: Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
     groups: dict[tuple[Path, str], PBRGroup] = {}
     for file_path in sorted(paths):
         if not file_path.is_file() or file_path.suffix.lower() not in IMAGE_EXTENSIONS:
@@ -123,10 +123,10 @@ def _scan_pbr_paths(paths: list[Path], root: Path, patterns: dict[str, list[str]
 
 def scan_pbr_groups(folder: str | Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
     root = Path(folder)
-    return _scan_pbr_paths(list(root.rglob("*")), root, patterns, match_mode, prefix_mode, custom_prefix)
+    return scan_pbr_paths(list(root.rglob("*")), root, patterns, match_mode, prefix_mode, custom_prefix)
 
 
-def _root_context_for_files(files: list[Path], root_context: str | Path | None = None) -> Path:
+def root_context_for_files(files: list[Path], root_context: str | Path | None = None) -> Path:
     if root_context is not None:
         root = Path(root_context)
     elif files:
@@ -318,8 +318,8 @@ def convert_pbr_folder(folder: str | Path, normal_type: str = "directx", resolut
 def convert_pbr_files(files: list[str | Path], root_context: str | Path | None = None, normal_type: str = "directx", resolution: str = "auto", co_mode: str = "basecolor", specular: float = 0.75, glossiness: float = 1.0, make_paa: bool = False, image_to_paa: str | Path | None = None, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", delete_source: bool = False, output_suffixes: dict[str, str] | None = None, prefix_mode: str = "auto", custom_prefix: str = "", progress_callback: ProgressCallback | None = None, add_watermark: bool = False, watermark_content: str = "", watermark_password: str | int = 1) -> BatchResult:
     result = BatchResult()
     file_paths = [Path(file) for file in files]
-    root = _root_context_for_files(file_paths, root_context)
-    groups = _scan_pbr_paths(file_paths, root, patterns, match_mode, prefix_mode, custom_prefix)
+    root = root_context_for_files(file_paths, root_context)
+    groups = scan_pbr_paths(file_paths, root, patterns, match_mode, prefix_mode, custom_prefix)
     result.messages.append(f"Selected {len(file_paths)} PBR file(s): found {len(groups)} PBR group(s).")
     total = len(groups)
     for index, group in enumerate(groups, start=1):

@@ -131,6 +131,20 @@ class SettingsPage(BasePage):
             label.setFixedWidth(width)
         return label
 
+    def _cell(self, caption: str, field: Field) -> QWidget:
+        """“小标签 + 输入框”一竖格。
+
+        右边那一列有标签，左边那列没有，输入框就会错开一格高度 —— 所以左边也走同一个格子，
+        只是标签写个空格占位。
+        """
+        cell = QWidget()
+        cell_lay = QVBoxLayout(cell)
+        cell_lay.setContentsMargins(0, 0, 0, 0)
+        cell_lay.setSpacing(2)
+        cell_lay.addWidget(self._label(caption or " ", 0, "MicroMuted"))
+        cell_lay.addWidget(field)
+        return cell
+
     # ------------------------------------------------------------ 通用
 
     def _build_general(self, lay: QVBoxLayout) -> None:
@@ -196,25 +210,19 @@ class SettingsPage(BasePage):
         }
 
         for processor, label, slots in GAME_MODES:
-            row = self._row(card, height=60)
+            row = self._row(card, height=64)
             row.addWidget(self._label(QCoreApplication.translate("GamePage", label), MODE_W))
 
             match = Field(", ".join(self.settings.game_suffixes.get(processor, [])), MATCH_W)
             match.editingFinished.connect(self._make_match_handler(processor, match))
             self._suffix_fields.append((match, self.settings.game_suffixes.get(processor, [])))
-            row.addWidget(match, 0, Qt.AlignVCenter)
+            row.addWidget(self._cell("", match), 0, Qt.AlignVCenter)
 
             outputs = self.settings.game_output_suffixes.get(processor, {})
             for slot in slots:
-                cell = QWidget()
-                cell_lay = QVBoxLayout(cell)
-                cell_lay.setContentsMargins(0, 0, 0, 0)
-                cell_lay.setSpacing(2)
-                cell_lay.addWidget(self._label(self._slot_labels.get(slot, slot), 0, "MicroMuted"))
                 field = Field(outputs.get(slot, ""), SLOT_W)
                 field.editingFinished.connect(self._make_output_handler(processor, slot, field))
-                cell_lay.addWidget(field)
-                row.addWidget(cell, 0, Qt.AlignVCenter)
+                row.addWidget(self._cell(self._slot_labels.get(slot, slot), field), 0, Qt.AlignVCenter)
             row.addStretch(1)
 
     # ------------------------------------------------------------ PBR2DayZ
@@ -247,18 +255,12 @@ class SettingsPage(BasePage):
             field.editingFinished.connect(self._make_keyword_handler(tex_type, field))
             row.addWidget(field, 1)
 
-        row = self._row(card)
+        row = self._row(card, height=64)
         row.addWidget(self._label(self.tr("Output suffixes"), MATCH_W))
         for out in OUTPUT_TYPES:
-            cell = QWidget()
-            cell_lay = QVBoxLayout(cell)
-            cell_lay.setContentsMargins(0, 0, 0, 0)
-            cell_lay.setSpacing(2)
-            cell_lay.addWidget(self._label(self._out_labels[out], 0, "MicroMuted"))
             field = Field(self.settings.pbr_output_suffixes.get(out, ""), SLOT_W)
             field.editingFinished.connect(self._make_pbr_output_handler(out, field))
-            cell_lay.addWidget(field)
-            row.addWidget(cell)
+            row.addWidget(self._cell(self._out_labels[out], field))
         row.addStretch(1)
 
     # ------------------------------------------------------------ RVMAT

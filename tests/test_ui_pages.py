@@ -316,6 +316,17 @@ class LanguageTests(WindowCase):
         # 默认语言是英文，漏翻只会退回英文，不会变成看不懂的东西
         self.assertEqual(self.settings.language, "en")
 
+    def test_language_switch_keeps_the_chosen_mode(self) -> None:
+        # 换语言时会重建下拉框的选项；如果重建时把选中项丢了，用户挑的处理模式
+        # 会被静默打回第一个 —— 那是个很难发现的错。
+        page = self.page("game")
+        page.mode_combo.set_value("SplitRGBAProcessor")
+        self.assertEqual(page.mode()[0], "SplitRGBAProcessor")
+        self.win.toggle_language()
+        pump()
+        self.assertEqual(page.mode_combo.value(), "SplitRGBAProcessor")
+        self.assertEqual(page.mode()[0], "SplitRGBAProcessor")
+
 
 class SessionTests(WindowCase):
     def test_pages_report_their_keys(self) -> None:
