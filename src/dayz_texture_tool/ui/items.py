@@ -32,6 +32,7 @@ class Item:
     key: str
     title: str
     subtitle: str = ""
+    source: str = ""  # 这一行的来源文件/文件夹。key 为了允许重复会带序号，要路径时看这里。
     inputs: list[Slot] = field(default_factory=list)
     outputs: list[Slot] = field(default_factory=list)
     output_note: str = ""

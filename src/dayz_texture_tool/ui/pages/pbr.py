@@ -13,7 +13,7 @@ from ...processors.pbr2dayz import (
     root_context_for_files,
     scan_pbr_paths,
 )
-from ..items import DONE, FAILED, PENDING, SKIPPED, Item, Slot
+from ..items import DONE, FAILED, PENDING, RUNNING, SKIPPED, Item, Slot
 from ..widgets.toolbar import Combo, Field, Segmented, Toggle, labelled
 from .file_page import FilePage, human_size
 
@@ -65,7 +65,6 @@ class PbrPage(FilePage):
             empty_accept="basecolor · normal · roughness · metallic · ao",
             parent=parent,
         )
-        self._paths: list[Path] = []
         self._groups: dict[str, PBRGroup] = {}
 
         self.normal_type = Segmented(
@@ -152,61 +151,56 @@ class PbrPage(FilePage):
 
     def mode_text(self) -> str:
         return self.tr("Grouped by folder + prefix · {count} group(s)").format(
-            count=len(self._groups)
+            count=len(self.list.items())
         )
 
     # ---- 行 ----
 
-    def add_paths(self, paths: list[Path]) -> int:
-        fresh: list[Path] = []
+    def build_items(self, paths: list[Path]) -> list[Item]:
+        files: list[Path] = []
         for path in paths:
             if path.is_dir():
-                fresh.extend(
+                files.extend(
                     sorted(child for child in path.rglob("*") if child.is_file())
                 )
             elif path.is_file():
-                fresh.append(path)
-        known = {str(path) for path in self._paths}
-        added = [path for path in fresh if str(path) not in known]
-        if not added:
-            self.refresh()
-            return 0
-        self._paths.extend(added)
-        self._rebuild()
-        self._save_session()
-        self.refresh()
-        return len(added)
-
-    def _root(self) -> Path:
-        return root_context_for_files(self._paths)
-
-    def _rebuild(self) -> None:
-        keep = {
-            item.key: (item.status, item.status_note, item.outputs)
-            for item in self.list.items()
-            if item.status in (DONE, FAILED)
-        }
+                files.append(path)
+        if not files:
+            return []
         groups = scan_pbr_paths(
-            self._paths,
-            self._root(),
+            files,
+            root_context_for_files(files),
             self.settings.pbr_suffixes,
             self.settings.pbr_match_mode,
             self.settings.pbr_prefix_mode,
             self.settings.pbr_custom_prefix,
         )
-        self._groups = {}
         items = []
         for group in groups:
             item = self._make_item(group)
             self._groups[item.key] = group
-            if item.key in keep:
-                item.status, item.status_note, item.outputs = keep[item.key]
             items.append(item)
+        return items
+
+    def _rebuild(self) -> None:
+        """换了前缀 / 匹配方式：重算还没跑的行，跑过的行冻着不动。"""
+        frozen = [
+            item for item in self.list.items() if item.status in (DONE, FAILED, RUNNING)
+        ]
+        files: list[Path] = []
+        for item in self.list.items():
+            if item.status in (PENDING, SKIPPED):
+                files.extend(slot.path for slot in item.inputs if slot.path is not None)
+        items = self.build_items(files) + frozen
+        keys = {item.key for item in items}
+        self._groups = {
+            key: group for key, group in self._groups.items() if key in keys
+        }
         self.list.set_items(items)
         self.list.empty.set_mode(self.mode_text())
 
     def _make_item(self, group: PBRGroup) -> Item:
-        key = f"{group.directory}|{group.prefix}"
+        key = self.next_key(f"{group.directory}|{group.prefix}")
         # 前缀就是文件夹名时，副标题改用上一层，免得两行写一样的字
         folder = group.directory.name
         subtitle = folder if folder != group.prefix else group.directory.parent.name
@@ -278,6 +272,8 @@ class PbrPage(FilePage):
             return
         item.status = DONE
         item.status_note = ""
+        # 跑过的行留着当记录，但不能再被“开始”跑一遍（源图可能已经被删了）
+        item.checked = False
         produced = {self._output_type(path): path for path in result.outputs}
         item.outputs = [
             Slot(

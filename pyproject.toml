@@ -33,6 +33,7 @@ dependencies = [
 
 [project.scripts]
 dayz-texture-tool = "dayz_texture_tool.app:main"
+dayz-texture-tool-cli = "dayz_texture_tool.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/MengYYY369/DayZ_Texture_Tool"

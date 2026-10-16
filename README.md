@@ -120,6 +120,95 @@ python -m venv .venv
 .venv\Scripts\python -m dayz_texture_tool
 ```
 
+## Command line
+
+The same five processing pipelines are also available without the GUI, which is what you want when a script — or an AI agent — has to drive the tool.
+
+```bash
+.venv\Scripts\python -m dayz_texture_tool.cli game --auto "C:\dump\rock"
+```
+
+Installing the package also gives you a `dayz-texture-tool-cli` command that does the same thing. `dayz-texture-tool` on its own still starts the GUI.
+
+### The seven subcommands
+
+| Subcommand | What it does |
+| --- | --- |
+| `game` | Game2PBR: one source texture in, one to four out. Needs `--mode NAME` or `--auto`. |
+| `pbr` | PBR2DayZ: one group of PBR textures in, up to four out. |
+| `watermark` | Embed or detect a watermark (`--mode embed` / `--mode detect`). |
+| `smdi` | SMDI: one colour texture in, one specular map out. |
+| `rvmat` | RVMAT: one material in, up to three damage variants out. |
+| `settings` | `path` / `list` / `get KEY` / `set KEY VALUE`, dotted keys. |
+| `gui` | Start the graphical interface. |
+
+Every processing subcommand takes one or more paths. Folders are walked **recursively**.
+
+### Examples
+
+```bash
+# Game2PBR, processor picked from the filename suffix
+dayz-texture-tool-cli game --auto "C:\dump\rock"
+
+# Game2PBR, explicit processor, override one output suffix
+dayz-texture-tool-cli game --mode DF_NRM --out-suffix normal=_N "C:\dump\rock"
+
+# PBR2DayZ without PAA, embedding a watermark
+dayz-texture-tool-cli pbr --no-paa --watermark --watermark-content "my mod" "C:\dump\wall"
+
+# SMDI, custom specular power
+dayz-texture-tool-cli smdi --specular 12.5 "C:\dump\rock_co.tga"
+
+# RVMAT, only the worn variant, with a custom damage texture
+dayz-texture-tool-cli rvmat --variants worn --damage-texture worn=dz\characters\data\worn_mc.paa "C:\dump"
+
+# see what would happen, write nothing
+dayz-texture-tool-cli --dry-run game --auto "C:\dump\rock"
+```
+
+### Global flags
+
+| Flag | Effect |
+| --- | --- |
+| `--json` | Print one machine-readable JSON object on stdout instead of text. |
+| `--dry-run` | Plan only; nothing is written. |
+| `--settings PATH` | Use a specific `settings.json`. |
+| `--quiet` | Do not print progress. |
+| `--verbose` | Keep progress even with `--json`. |
+| `--strict` | Exit 1 when nothing succeeded. No effect with `--dry-run`. |
+
+Flags may be written before or after the subcommand.
+
+### Output and exit codes
+
+Results go to **stdout**, progress goes to **stderr**, so `--json` output stays parseable no matter what. JSON output is pure ASCII, so it survives any console code page.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Everything that could run did run. |
+| `1` | At least one input failed, or `--strict` and nothing succeeded. |
+| `2` | Bad usage: unknown subcommand, unknown mode, illegal flag combination, bad settings value. |
+
+### Settings as defaults
+
+Every flag defaults to the value stored in `settings.json`, so a configured GUI and the command line agree out of the box. A flag always wins over the file.
+
+```bash
+dayz-texture-tool-cli settings path
+dayz-texture-tool-cli settings get pbr_output_suffixes.co
+dayz-texture-tool-cli settings set pbr_output_suffixes.co _custom
+```
+
+`settings set` checks the value against the field type and the allowed choices, and refuses to write when the existing file is not valid JSON — so a broken config is never silently replaced by defaults.
+
+### Three deliberate differences from the GUI
+
+1. **Folders are always walked recursively.** The GUI does this for Game2PBR, PBR2DayZ and RVMAT only.
+2. **`--delete-source` is off by default.** The GUI has it on. Pass the flag when you want the old files recycled.
+3. **An explicit `--mode` does not filter by suffix.** The GUI hides rows that do not match the selected processor. On the command line every file you name is processed; suffix dispatch only happens with `--auto`.
+
+Full reference — every flag, the dry-run vocabulary and the JSON schema: [`docs/CLI.md`](docs/CLI.md).
+
 ## Building a release
 
 ```powershell
@@ -144,7 +233,7 @@ This creates a virtual environment, installs PyInstaller, runs the test suite, b
 .venv\Scripts\python -m unittest discover -s tests
 ```
 
-155 tests: 112 cover the processing logic, 43 cover the interface.
+228 tests: 179 cover the processing logic and the command line, 49 cover the interface.
 
 The processing layer (`processors/`, `batch.py`, `models.py`, `settings.py`) has no GUI dependency and can be imported and tested on its own. Interface tests run headless through Qt's `offscreen` platform plugin.
 
@@ -159,7 +248,7 @@ src/dayz_texture_tool/
     translations/ dayz_zh_CN.ts / .qm
     theme.py      palette, font scale, global stylesheet
     shell.py      main window
-docs/             feature report, design notes, screenshots
+docs/             CLI guide, feature report, design notes, screenshots
 tests/            unittest suite
 ```
 

@@ -120,6 +120,95 @@ python -m venv .venv
 .venv\Scripts\python -m dayz_texture_tool
 ```
 
+## 命令行用法
+
+界面里那五套处理流程，不打开窗口也能跑。适合写成脚本批量处理，也适合让 AI 直接调用。
+
+```bash
+.venv\Scripts\python -m dayz_texture_tool.cli game --auto "C:\dump\rock"
+```
+
+安装之后还会多出一个 `dayz-texture-tool-cli` 命令，作用完全一样。单独跑 `dayz-texture-tool` 仍然是打开界面。
+
+### 七个子命令
+
+| 子命令 | 做什么 |
+| --- | --- |
+| `game` | Game2PBR：一张原贴图进去，一到四张出来。需要配 `--mode 名字` 或 `--auto`。 |
+| `pbr` | PBR2DayZ：一组 PBR 贴图进去，最多四张出来。 |
+| `watermark` | 加或查水印（`--mode embed` 加，`--mode detect` 查）。 |
+| `smdi` | SMDI：一张颜色贴图进去，一张高光图出来。 |
+| `rvmat` | RVMAT：一个材质进去，最多三个磨损变体出来。 |
+| `settings` | `path` / `list` / `get 键` / `set 键 值`，键支持用点连起来。 |
+| `gui` | 打开图形界面。 |
+
+每个处理子命令后面可以跟一个或多个路径。**文件夹会一直往里翻**，子文件夹里的东西也会被处理。
+
+### 几个例子
+
+```bash
+# Game2PBR，处理器由文件名后缀自己判断
+dayz-texture-tool-cli game --auto "C:\dump\rock"
+
+# Game2PBR，手动指定处理器，顺便改一个输出后缀
+dayz-texture-tool-cli game --mode DF_NRM --out-suffix normal=_N "C:\dump\rock"
+
+# PBR2DayZ，不生成 PAA，顺便加水印
+dayz-texture-tool-cli pbr --no-paa --watermark --watermark-content "我的模组" "C:\dump\wall"
+
+# SMDI，改一下高光强度
+dayz-texture-tool-cli smdi --specular 12.5 "C:\dump\rock_co.tga"
+
+# RVMAT，只要磨损版，并换成自己的磨损贴图
+dayz-texture-tool-cli rvmat --variants worn --damage-texture worn=dz\characters\data\worn_mc.paa "C:\dump"
+
+# 只看会发生什么，不真的写文件
+dayz-texture-tool-cli --dry-run game --auto "C:\dump\rock"
+```
+
+### 全局开关
+
+| 开关 | 作用 |
+| --- | --- |
+| `--json` | 输出一整块 JSON，给程序读，不给人读。 |
+| `--dry-run` | 只试算，不写任何文件。 |
+| `--settings 路径` | 用指定的那个 `settings.json`。 |
+| `--quiet` | 不打印进度。 |
+| `--verbose` | 配 `--json` 时也保留进度。 |
+| `--strict` | 一件都没成功就报错退出。配 `--dry-run` 时无效。 |
+
+这些开关放在子命令前面或后面都行。
+
+### 输出和退出码
+
+处理结果走**标准输出**，进度走**标准错误**，所以加了 `--json` 之后，输出永远是干净的、能被程序直接解析。JSON 只含 ASCII 字符，换什么代码页都不会乱码。
+
+| 退出码 | 意思 |
+| --- | --- |
+| `0` | 该做的都做了。 |
+| `1` | 至少有一个输入失败；或者加了 `--strict` 而一件都没成功。 |
+| `2` | 用法错了：子命令不认识、模式名不认识、开关搭配不对、设置值不合法。 |
+
+### 设置文件当默认值
+
+每个开关的默认值都取自 `settings.json`，所以在界面里配好之后，命令行直接就能用，不用重复填。命令行上写的开关永远优先于文件。
+
+```bash
+dayz-texture-tool-cli settings path
+dayz-texture-tool-cli settings get pbr_output_suffixes.co
+dayz-texture-tool-cli settings set pbr_output_suffixes.co _custom
+```
+
+`settings set` 会先检查值和字段类型、允许的取值是否对得上；如果原来那个文件已经不是合法的 JSON，它宁可报错也不会写——绝不会把你的配置默默换成默认值。
+
+### 和界面的三处不同
+
+1. **文件夹一律往里翻。** 界面里只有 Game2PBR、PBR2DayZ、RVMAT 会这样。
+2. **`--delete-source` 默认关闭。** 界面里是开着的。真想删掉原文件，得手动加上这个开关。
+3. **手动指定 `--mode` 时不会按后缀筛文件。** 界面里会把跟当前处理器对不上的行藏起来。命令行上你点了名的文件都会处理；想让它自己判断该用哪个处理器，得用 `--auto`。
+
+完整说明（每个开关、`--dry-run` 的状态词、JSON 结构）：[`docs/CLI.zh-CN.md`](docs/CLI.zh-CN.md)。
+
 ## 打包发布
 
 ```powershell
@@ -144,7 +233,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 .venv\Scripts\python -m unittest discover -s tests
 ```
 
-155 个用例：112 个覆盖处理逻辑，43 个覆盖界面。
+228 个用例：179 个覆盖处理逻辑与命令行，49 个覆盖界面。
 
 处理层（`processors/`、`batch.py`、`models.py`、`settings.py`）不依赖界面，可以单独导入和测试。界面测试通过 Qt 的 `offscreen` 插件无头运行。
 
@@ -159,7 +248,7 @@ src/dayz_texture_tool/
     translations/ dayz_zh_CN.ts / .qm
     theme.py      调色板、字号台阶、全局样式表
     shell.py      主窗口
-docs/             功能报告、设计说明、截图
+docs/             CLI 用法、功能报告、设计说明、截图
 tests/            unittest 测试
 ```
 

@@ -97,7 +97,10 @@ class RvmatPage(FilePage):
         return items
 
     def _make_item(self, path: Path) -> Item:
-        item = Item(key=str(path), title=path.name, subtitle=path.parent.name)
+        item = Item(
+            key=self.next_key(str(path)), title=path.name, subtitle=path.parent.name
+        )
+        item.source = str(path)
         item.size_bottom = self.size_text(path)
         item.inputs = [Slot(label=path.name, path=path, size_text=item.size_bottom)]
         hit = excluded_variant(path, self.settings.rvmat_excluded_suffixes)
@@ -124,7 +127,9 @@ class RvmatPage(FilePage):
     # ---- 跑 ----
 
     def process_key(self, key: str) -> ProcessingResult:
-        return convert_rvmat(key, self.variants(), self.settings.rvmat_damage_textures)
+        return convert_rvmat(
+            self.source_of(key), self.variants(), self.settings.rvmat_damage_textures
+        )
 
     def apply_result(self, item: Item, result: ProcessingResult) -> None:
         super().apply_result(item, result)

@@ -66,7 +66,8 @@ class SmdiPage(FilePage):
                 continue
             items.append(
                 Item(
-                    key=str(path),
+                    key=self.next_key(str(path)),
+                    source=str(path),
                     title=path.name,
                     subtitle=path.parent.name,
                     inputs=[
@@ -82,7 +83,7 @@ class SmdiPage(FilePage):
 
     def process_key(self, key: str) -> ProcessingResult:
         return convert_color_to_smdi(
-            key,
+            self.source_of(key),
             self.settings.smdi_specular_power,
             self.make_paa.isChecked(),
             image_to_paa=self.settings.image_to_paa,

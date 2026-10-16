@@ -89,6 +89,8 @@ class FilePage(BasePage):
         self.settings = settings
         self._running = False
         self._results = BatchResult()
+        self._next_key = 0
+        self._sources: dict[str, str] = {}
         # 表头文字存下来 —— 构造时还没装翻译器，只能在 retranslate() 里再翻一次
         self._in_label = in_label
         self._out_label = out_label
@@ -164,26 +166,46 @@ class FilePage(BasePage):
     # ---- 列表 ----
 
     def add_paths(self, paths: list[Path]) -> int:
-        existing = {item.key for item in self.list.items()}
-        fresh = [path for path in paths if str(path) not in existing]
-        items = self.build_items(fresh)
+        # 不按路径去重：同一批东西再拖一次就是新的一行，跑过的旧行留着当记录。
+        items = self.build_items(paths)
         if items:
+            for item in items:
+                self._sources[item.key] = item.source
             self.list.model.add_items(items)
             self._save_session()
         self.refresh()
+        if not items:
+            # 拖进来一行都没认出来（文件夹空的 / 里面没有图片）也得有动静
+            self.status.set_status(self.tr("Nothing to add: no images found here."))
         return len(items)
+
+    def _add_safely(self, paths: list[Path]) -> None:
+        """拖进来 / 选进来的东西坏掉了也得有动静：把原因写到状态栏，不静默失败。"""
+        try:
+            self.add_paths(paths)
+        except Exception as exc:
+            self.status.set_status(f"{type(exc).__name__}: {exc}")
+
+    def next_key(self, base: str) -> str:
+        """给每行一个不重样的 key。同一批东西拖两次要两行，key 就不能一样。"""
+        self._next_key += 1
+        return f"{base}#{self._next_key}"
+
+    def source_of(self, key: str) -> str:
+        """key 对应的来源路径。子类建行时把 item.source 填上。"""
+        return self._sources.get(key) or key
 
     def pick_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
             self, self.tr("Add files"), "", self.file_filter()
         )
         if files:
-            self.add_paths([Path(name) for name in files])
+            self._add_safely([Path(name) for name in files])
 
     def pick_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, self.tr("Add folder"))
         if folder:
-            self.add_paths([Path(folder)])
+            self._add_safely([Path(folder)])
 
     def file_filter(self) -> str:
         return (
@@ -269,7 +291,7 @@ class FilePage(BasePage):
             if url.isLocalFile()
         ]
         if paths:
-            self.add_paths(paths)
+            self._add_safely(paths)
             event.acceptProposedAction()
 
     # ---- 跑 ----
@@ -304,6 +326,8 @@ class FilePage(BasePage):
         if result.success:
             item.status = DONE
             item.status_note = ""
+            # 跑过的行留着当记录，但不能让它再被“开始”跑一遍（源图可能已经被删了）
+            item.checked = False
             item.outputs = [
                 Slot(
                     path=path,
@@ -390,7 +414,8 @@ class FilePage(BasePage):
     # ---- 记忆 ----
 
     def to_session(self) -> dict:
-        return {"keys": [item.key for item in self.list.items()]}
+        # 存来源路径而不是 key：key 现在带序号，下次打开时拼不出文件在哪。
+        return {"keys": [item.source or item.key for item in self.list.items()]}
 
     def load_session(self, payload: dict) -> None:
         keys = payload.get("keys") if isinstance(payload, dict) else None

@@ -67,6 +67,11 @@
         <translation>没有选择任何图片。</translation>
     </message>
     <message>
+        <location filename="../pages/file_page.py" line="179"/>
+        <source>Nothing to add: no images found here.</source>
+        <translation>这里没有找到能处理的图片。</translation>
+    </message>
+    <message>
         <location filename="../pages/file_page.py" line="344"/>
         <source>Working...</source>
         <translation>处理中…</translation>

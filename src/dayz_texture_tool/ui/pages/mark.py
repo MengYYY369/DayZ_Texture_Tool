@@ -133,7 +133,8 @@ class MarkPage(FilePage):
             if not path.is_file():
                 continue
             item = Item(
-                key=str(path),
+                key=self.next_key(str(path)),
+                source=str(path),
                 title=path.name,
                 subtitle=path.parent.name,
                 inputs=[
@@ -156,13 +157,13 @@ class MarkPage(FilePage):
     def process_key(self, key: str) -> ProcessingResult:
         if self.detecting():
             return detect_watermark(
-                key,
+                self.source_of(key),
                 self.settings.watermark_password,
                 self.settings.watermark_length,
                 image_to_paa=self.settings.image_to_paa,
             )
         return add_watermark(
-            key,
+            self.source_of(key),
             self.settings.watermark_content,
             self.settings.watermark_password,
             image_to_paa=self.settings.image_to_paa,

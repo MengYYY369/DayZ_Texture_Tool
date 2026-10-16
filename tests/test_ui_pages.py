@@ -116,12 +116,29 @@ class DropTests(WindowCase):
         page.dropEvent(drop_event([folder]))
         self.assertEqual(len(page.list.items()), 2)
 
-    def test_same_file_twice_only_counts_once(self) -> None:
+    def test_the_same_file_dropped_twice_makes_two_rows(self) -> None:
         page = self.page("game")
         path = make_image(self.root / "a_nrm.png")
         page.add_paths([path])
         page.add_paths([path])
+        # 再拖一次就是新的一行，旧行留着当记录
+        self.assertEqual(len(page.list.items()), 2)
+        self.assertEqual(len({item.key for item in page.list.items()}), 2)
+
+    def test_a_broken_drop_says_why_instead_of_failing_silently(self) -> None:
+        page = self.page("game")
+        with patch.object(page, "build_items", side_effect=RuntimeError("boom")):
+            page._add_safely([self.root / "a_nrm.png"])
+        self.assertIn("boom", page.status._status.text())
+
+    def test_dropping_an_empty_folder_says_so(self) -> None:
+        page = self.page("game")
+        page.add_paths([make_image(self.root / "a_nrm.png")])
+        empty = self.root / "empty"
+        empty.mkdir()
+        page.add_paths([empty])
         self.assertEqual(len(page.list.items()), 1)
+        self.assertIn("Nothing to add", page.status._status.text())
 
     def test_matching_suffix_decides_selectable(self) -> None:
         page = self.page("game")
@@ -200,7 +217,7 @@ class RemoveTests(WindowCase):
     def test_the_row_button_removes_only_that_row(self) -> None:
         page = self.page("game")
         self._add(page, "a_nrm.png", "b_nrm.png")
-        page._on_slot(str(self.root / "a_nrm.png"), -3)
+        page._on_slot(page.list.items()[0].key, -3)
         self.assertEqual([item.title for item in page.list.items()], ["b_nrm.png"])
 
     def test_remove_checked_only_takes_the_ticked_rows(self) -> None:
@@ -335,6 +352,22 @@ class RunTests(WindowCase):
             wait_for(page)
         self.assertEqual(calls, ["one_nrm.png"])
 
+    def test_a_finished_row_is_unticked_so_start_wont_run_it_twice(self) -> None:
+        page = self.page("game")
+        page.add_paths([make_image(self.root / "one_nrm.png")])
+        calls: list[str] = []
+
+        def fake(path, processor, **kwargs):
+            calls.append(Path(path).name)
+            return ProcessingResult(True, input_path=Path(path), processor=processor)
+
+        with patch("dayz_texture_tool.ui.pages.game.process_game2pbr", side_effect=fake):
+            page.start()
+            wait_for(page)
+            page.start()
+            pump()
+        self.assertEqual(calls, ["one_nrm.png"])
+
     def test_start_does_nothing_without_checked_rows(self) -> None:
         page = self.page("game")
         page.add_paths([make_image(self.root / "one_nrm.png")])
@@ -349,6 +382,13 @@ class PbrTests(WindowCase):
     def _fixture(self) -> Path:
         folder = self.root / "brick"
         for kind in ("basecolor", "normal", "roughness", "metallic", "ao"):
+            make_image(folder / f"brick_{kind}.png")
+        return folder
+
+    def _named_folder(self) -> Path:
+        """文件夹名（textures）和文件前缀（brick）故意不一样，好看出前缀是按哪个取的。"""
+        folder = self.root / "textures"
+        for kind in ("basecolor", "normal"):
             make_image(folder / f"brick_{kind}.png")
         return folder
 
@@ -399,6 +439,27 @@ class PbrTests(WindowCase):
         )
         self.assertEqual(item.status, DONE)
         self.assertTrue(all(not slot.missing for slot in item.outputs))
+
+    def test_dropping_the_same_folder_again_makes_a_second_row(self) -> None:
+        page = self.page("pbr")
+        page.add_paths([self._fixture()])
+        page.add_paths([self._fixture()])
+        self.assertEqual([item.title for item in page.list.items()], ["brick", "brick"])
+
+    def test_pending_rows_follow_the_prefix_mode(self) -> None:
+        page = self.page("pbr")
+        page.add_paths([self._named_folder()])
+        self.assertEqual([item.title for item in page.list.items()], ["brick"])
+        page.prefix_mode.set_value("current_folder", notify=True)
+        self.assertEqual([item.title for item in page.list.items()], ["textures"])
+
+    def test_a_finished_row_keeps_its_name_when_the_prefix_mode_changes(self) -> None:
+        page = self.page("pbr")
+        page.add_paths([self._named_folder()])
+        item = page.list.items()[0]
+        page.apply_result(item, ProcessingResult(True, processor="PBR2DayZ"))
+        page.prefix_mode.set_value("current_folder", notify=True)
+        self.assertEqual([row.title for row in page.list.items()], ["brick"])
 
 
 class LanguageTests(WindowCase):

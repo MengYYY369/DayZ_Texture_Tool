@@ -135,8 +135,16 @@ def _path_key(path: Path) -> str:
     return os.path.normcase(str(path.resolve()))
 
 
+def plan_outputs(path: Path, make_paa: bool) -> list[Path]:
+    """这一张图最终会留下哪个文件，不真的处理。make_paa 时中间那张 .tga 会被删掉，
+    所以只算 .paa —— 规划结果跟实际产物一致（dry-run 就靠它）。"""
+    return [smdi_output_path(path, make_paa)]
+
+
 def _planned_outputs(path: Path, make_paa: bool) -> list[Path]:
-    outputs = [smdi_output_path(path, make_paa)]
+    """冲突预检用：除了最终产物，make_paa 时那张会被清理掉的 .tga 也算上 —— 它要是
+    跟别人的输入撞名，同样会被这个批次毁掉。"""
+    outputs = list(plan_outputs(path, make_paa))
     if make_paa:
         outputs.append(smdi_output_path(path, False))
     return outputs

@@ -72,6 +72,11 @@ def detect_texture_match(filename: str, patterns: dict[str, list[str]] | None = 
     return None
 
 
+def _is_data_folder(directory: Path) -> bool:
+    """DayZ 插件的 data 目录：产物按插件名命名，不按文件名。"""
+    return directory.name.lower() == "data" and directory.parent != directory
+
+
 def _output_prefix(directory: Path, root: Path, prefix_mode: str = "auto", custom_prefix: str = "") -> str:
     if prefix_mode == "custom" and custom_prefix.strip():
         return custom_prefix.strip()
@@ -79,9 +84,13 @@ def _output_prefix(directory: Path, root: Path, prefix_mode: str = "auto", custo
         return directory.name
     if prefix_mode == "parent_folder" and directory.parent != directory:
         return directory.parent.name
-    if directory.name.lower() == "data" and directory.parent != directory:
+    if _is_data_folder(directory):
         return directory.parent.name
-    rel_dir = directory.relative_to(root)
+    try:
+        rel_dir = directory.relative_to(root)
+    except ValueError:
+        # 跨盘符的文件没有共同根目录，退回文件夹名
+        return directory.name
     return root.name if str(rel_dir) == "." else directory.name
 
 
@@ -102,22 +111,77 @@ def _filename_prefix(filename: str, keyword: str, match_mode: str) -> str:
     return stem
 
 
+def _filename_prefix_for(name: str, keyword: str, match_mode: str) -> str:
+    """文件名里关键词前面那串字。整名就是关键词（也就是取不出前缀）时给空串。"""
+    prefix = _filename_prefix(name, keyword, match_mode)
+    if prefix and len(prefix) < len(Path(name).stem):
+        return prefix
+    return ""
+
+
+def _shared_prefixes(directory: Path, entries: list[tuple[Path, str, str]], prefix_mode: str, match_mode: str) -> dict[Path, str]:
+    """一个文件夹里的文件各算哪个前缀。空字典 = 整批按文件夹名走。"""
+    if prefix_mode not in ("auto", "filename_prefix"):
+        return {}
+    if prefix_mode == "auto" and _is_data_folder(directory):
+        # data 文件夹按插件名（上层文件夹名）走老规矩
+        return {}
+    # 每个文件去掉命中的关键词，剩下的那串字就是它的前缀
+    guesses = {
+        file_path: _filename_prefix_for(file_path.name, keyword, match_mode)
+        for file_path, _, keyword in entries
+    }
+    # 一套图里每种贴图的关键词写法常常不一样（_C / _MRA_met / _NCE_normal），
+    # 去完会剩下 _ni / _ni_MRA / _ni_NCE 这种长短不一的名字。
+    # 谁是谁的开头就算同一套，取最短的那个当名字。
+    names: list[str] = []
+    for guess in sorted({value for value in guesses.values() if value}, key=len):
+        if not any(guess.startswith(name) for name in names):
+            names.append(guess)
+    return {
+        file_path: next(name for name in names if guess.startswith(name))
+        for file_path, guess in guesses.items()
+        if guess
+    }
+
+
+def _is_own_output(path: Path) -> bool:
+    """本工具自己写出来的产物（xxx_co.tga 这种），再扫一遍时不能当成原图。
+
+    只有 .tga 要管：产物都是 .tga，而 xxx_nohq.tga 里的 _n 会被模糊匹配
+    认成法线图，把真正的新法线原图顶掉。
+    """
+    if path.suffix.lower() != ".tga":
+        return False
+    stem = path.stem.lower()
+    return any(stem.endswith(suffix) for suffix in DEFAULT_OUTPUT_SUFFIXES.values())
+
+
 def scan_pbr_paths(paths: list[Path], root: Path, patterns: dict[str, list[str]] | None = None, match_mode: str = "fuzzy", prefix_mode: str = "auto", custom_prefix: str = "") -> list[PBRGroup]:
-    groups: dict[tuple[Path, str], PBRGroup] = {}
+    # 先按文件夹归拢：auto 模式要看完一个文件夹里的所有文件，才知道能不能按文件名分组
+    found: dict[Path, list[tuple[Path, str, str]]] = {}
     for file_path in sorted(paths):
         if not file_path.is_file() or file_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        if _is_own_output(file_path):
             continue
         match = detect_texture_match(file_path.name, patterns, match_mode)
         if match is None:
             continue
-        tex_type, keyword = match
-        prefix = _output_prefix(file_path.parent, root, prefix_mode, custom_prefix)
-        if prefix_mode == "filename_prefix":
-            prefix = _filename_prefix(file_path.name, keyword, match_mode) or prefix
-        group_key = (file_path.parent, prefix)
-        group = groups.setdefault(group_key, PBRGroup(prefix=prefix, directory=file_path.parent, textures={}))
-        if tex_type not in group.textures:
-            group.textures[tex_type] = file_path
+        found.setdefault(file_path.parent, []).append((file_path, match[0], match[1]))
+
+    groups: dict[tuple[Path, str], PBRGroup] = {}
+    for directory, entries in found.items():
+        folder_prefix = _output_prefix(directory, root, prefix_mode, custom_prefix)
+        prefixes = _shared_prefixes(directory, entries, prefix_mode, match_mode)
+        for file_path, tex_type, _ in entries:
+            prefix = prefixes.get(file_path, folder_prefix)
+            group_key = (directory, prefix)
+            group = groups.setdefault(
+                group_key, PBRGroup(prefix=prefix, directory=directory, textures={})
+            )
+            if tex_type not in group.textures:
+                group.textures[tex_type] = file_path
     return list(groups.values())
 
 
@@ -130,7 +194,11 @@ def root_context_for_files(files: list[Path], root_context: str | Path | None = 
     if root_context is not None:
         root = Path(root_context)
     elif files:
-        root = Path(os.path.commonpath([str(path.parent) for path in files]))
+        try:
+            root = Path(os.path.commonpath([str(path.parent) for path in files]))
+        except ValueError:
+            # 跨盘符（D:\ 和 C:\）没有共同路径，退回第一张图所在的文件夹
+            root = Path(files[0]).parent
     else:
         root = Path(".")
     if root.name.lower() == "data" and root.parent != root:
@@ -164,6 +232,24 @@ def _output_suffixes(output_suffixes: dict[str, str] | None = None) -> dict[str,
             if key in suffixes:
                 suffixes[key] = str(suffix)
     return suffixes
+
+
+def _group_output_path(group: PBRGroup, suffixes: dict[str, str], key: str) -> Path:
+    """一组 PBR 贴图的产物路径。convert_pbr_group 和 plan_group_outputs 共用这一条规则。"""
+    return group.directory / f"{group.prefix}{suffixes[key]}.tga"
+
+
+def plan_group_outputs(group: PBRGroup, output_suffixes: dict[str, str] | None = None) -> list[Path]:
+    """这一组会产出哪些 .tga，不真的处理。顺序跟 convert_pbr_group 一致。
+
+    只算确定的那一步（四张 .tga）；make_paa / delete_source 是后置步骤，可能把 .tga
+    换成 .paa，实际产物以处理结果为准。"""
+    suffixes = _output_suffixes(output_suffixes)
+    outputs: list[Path] = []
+    for tex_type, key in (("basecolor", "co"), ("normal", "nohq"), ("roughness", "smdi"), ("ao", "as")):
+        if tex_type in group.textures:
+            outputs.append(_group_output_path(group, suffixes, key))
+    return outputs
 
 
 def convert_co_texture(base_color_path: Path, metal_path: Path | None, output_path: Path, co_mode: str, resolution: tuple[int, int]) -> Path:
@@ -270,16 +356,16 @@ def convert_pbr_group(group: PBRGroup, normal_type: str = "directx", resolution:
         suffixes = _output_suffixes(output_suffixes)
         if "basecolor" in textures:
             res = _resolution(textures["basecolor"], resolution)
-            outputs.append(convert_co_texture(textures["basecolor"], textures.get("metallic"), group.directory / f"{group.prefix}{suffixes['co']}.tga", co_mode, res))
+            outputs.append(convert_co_texture(textures["basecolor"], textures.get("metallic"), _group_output_path(group, suffixes, "co"), co_mode, res))
         if "normal" in textures:
             res = _resolution(textures["normal"], resolution)
-            outputs.append(convert_nohq_texture(textures["normal"], group.directory / f"{group.prefix}{suffixes['nohq']}.tga", normal_type, res))
+            outputs.append(convert_nohq_texture(textures["normal"], _group_output_path(group, suffixes, "nohq"), normal_type, res))
         if "roughness" in textures:
             res = _resolution(textures["roughness"], resolution)
-            outputs.append(convert_smdi_texture(textures.get("metallic"), textures["roughness"], group.directory / f"{group.prefix}{suffixes['smdi']}.tga", specular, glossiness, res))
+            outputs.append(convert_smdi_texture(textures.get("metallic"), textures["roughness"], _group_output_path(group, suffixes, "smdi"), specular, glossiness, res))
         if "ao" in textures:
             res = _resolution(textures["ao"], resolution)
-            outputs.append(convert_as_texture(textures["ao"], group.directory / f"{group.prefix}{suffixes['as']}.tga", res))
+            outputs.append(convert_as_texture(textures["ao"], _group_output_path(group, suffixes, "as"), res))
         if add_watermark and outputs:
             metadata.update(_add_watermarks(outputs, watermark_content, watermark_password, messages, image_to_paa))
         if make_paa and outputs:

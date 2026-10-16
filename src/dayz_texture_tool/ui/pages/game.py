@@ -201,7 +201,7 @@ class GamePage(FilePage):
         matched = 0
         for item in self.list.items():
             if item.selectable:
-                item.checked = self.matches(Path(item.key))
+                item.checked = self.matches(Path(self.source_of(item.key)))
                 matched += 1 if item.checked else 0
         self.list.header.set_all(
             matched == len(self.list.checked_items()) and matched > 0
@@ -228,7 +228,10 @@ class GamePage(FilePage):
         return items
 
     def _make_item(self, path: Path) -> Item:
-        item = Item(key=str(path), title=path.name, subtitle=path.parent.name)
+        item = Item(
+            key=self.next_key(str(path)), title=path.name, subtitle=path.parent.name
+        )
+        item.source = str(path)
         item.size_top = self.image_size_text(path)
         item.size_bottom = self.size_text(path)
         self._classify(item, path)
@@ -259,14 +262,14 @@ class GamePage(FilePage):
         """换了模式或匹配方式之后，还没跑过的行重新判一次。"""
         for item in self.list.items():
             if item.status in (PENDING, SKIPPED):
-                self._classify(item, Path(item.key))
+                self._classify(item, Path(self.source_of(item.key)))
         self.list.view.viewport().update()
 
     # ---- 跑 ----
 
     def process_key(self, key: str) -> ProcessingResult:
         return process_game2pbr(
-            key,
+            self.source_of(key),
             self.mode()[0],
             delete_source=self.delete_source.isChecked(),
             output_suffixes=self.output_suffixes(),

@@ -26,7 +26,7 @@ def save_rgb_size(path, color, size):
 
 
 class PBR2DayZTests(unittest.TestCase):
-    def test_scan_groups_pbr_textures_by_folder(self):
+    def test_scan_groups_pbr_textures_by_filename_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             save_rgb(root / "TestMat_BaseColor.png", [100, 90, 80])
@@ -38,12 +38,82 @@ class PBR2DayZTests(unittest.TestCase):
             groups = scan_pbr_groups(root)
 
             self.assertEqual(len(groups), 1)
-            self.assertEqual(groups[0].prefix, root.name)
+            self.assertEqual(groups[0].prefix, "TestMat")
             self.assertIn("basecolor", groups[0].textures)
             self.assertIn("normal", groups[0].textures)
             self.assertIn("roughness", groups[0].textures)
             self.assertIn("metallic", groups[0].textures)
             self.assertIn("ao", groups[0].textures)
+
+    def test_scan_keeps_two_sets_in_one_folder_apart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for prefix in ("a", "b"):
+                save_rgb(root / f"{prefix}_BaseColor.png", [100, 90, 80])
+                save_rgb(root / f"{prefix}_Normal.png", [127, 127, 255])
+
+            groups = scan_pbr_groups(root)
+
+            self.assertEqual([group.prefix for group in groups], ["a", "b"])
+            self.assertEqual(groups[1].textures["basecolor"].name, "b_BaseColor.png")
+
+    def test_scan_falls_back_to_the_folder_name_without_a_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_rgb(root / "BaseColor.png", [100, 90, 80])
+            save_rgb(root / "Normal.png", [127, 127, 255])
+
+            groups = scan_pbr_groups(root)
+
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0].prefix, root.name)
+
+    def test_scan_keeps_a_set_together_when_every_map_is_named_differently(self):
+        patterns = {
+            "basecolor": ["_c"],
+            "normal": ["_NCE", "normal"],
+            "roughness": ["_MRA_rou"],
+            "metallic": ["_MRA_met"],
+            "ao": ["_MRA_ao"],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_rgb(root / "Bar_M-330_TranAttack_ni_C.png", [100, 90, 80])
+            save_rgb(root / "Bar_M-330_TranAttack_ni_MRA_ao.png", [255, 255, 255])
+            save_rgb(root / "Bar_M-330_TranAttack_ni_MRA_met.png", [10, 10, 10])
+            save_rgb(root / "Bar_M-330_TranAttack_ni_MRA_rou.png", [60, 60, 60])
+            save_rgb(root / "Bar_M-330_TranAttack_ni_NCE_normal.png", [127, 127, 255])
+
+            groups = scan_pbr_groups(root, patterns=patterns, match_mode="exact")
+
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0].prefix, "Bar_M-330_TranAttack_ni")
+            self.assertEqual(
+                sorted(groups[0].textures),
+                ["ao", "basecolor", "metallic", "normal", "roughness"],
+            )
+
+    @unittest.skipUnless(sys.platform == "win32", "跨盘符只有 Windows 上有")
+    def test_root_context_falls_back_when_paths_span_two_drives(self):
+        first = Path("C:/pbr/a_BaseColor.png")
+        second = Path("D:/pbr/b_BaseColor.png")
+
+        self.assertEqual(pbr2dayz.root_context_for_files([first, second]), first.parent)
+
+    def test_scan_ignores_the_outputs_of_a_previous_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_rgb(root / "brick_BaseColor.png", [100, 90, 80])
+            save_rgb(root / "brick_Normal.png", [127, 127, 255])
+            # 上一轮留下的产物：_nohq 里的 _n 会被模糊匹配当成法线
+            save_rgb(root / "brick_nohq.tga", [127, 127, 255])
+            save_rgb(root / "brick_co.tga", [100, 90, 80])
+
+            groups = scan_pbr_groups(root)
+
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0].textures["normal"].name, "brick_Normal.png")
+            self.assertEqual(groups[0].textures["basecolor"].name, "brick_BaseColor.png")
 
     def test_convert_pbr_folder_writes_dayz_tga_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -58,7 +128,7 @@ class PBR2DayZTests(unittest.TestCase):
 
             self.assertTrue(result.success)
             self.assertEqual(result.total, 1)
-            expected = [f"{root.name}_co.tga", f"{root.name}_nohq.tga", f"{root.name}_smdi.tga", f"{root.name}_as.tga"]
+            expected = ["TestMat_co.tga", "TestMat_nohq.tga", "TestMat_smdi.tga", "TestMat_as.tga"]
             self.assertEqual([p.name for p in result.outputs], expected)
             for name in expected:
                 self.assertTrue((root / name).exists())
@@ -71,7 +141,7 @@ class PBR2DayZTests(unittest.TestCase):
             result = convert_pbr_folder(root, normal_type="opengl", resolution="auto", make_paa=False)
 
             self.assertTrue(result.success)
-            with Image.open(root / f"{root.name}_co.tga") as output:
+            with Image.open(root / "Wide_co.tga") as output:
                 self.assertEqual(output.size, (2048, 1024))
 
     def test_convert_pbr_folder_uses_parent_name_for_data_folder_outputs(self):
@@ -96,7 +166,7 @@ class PBR2DayZTests(unittest.TestCase):
             result = convert_pbr_folder(root, output_suffixes={"co": "_colorx", "nohq": "_normalx"})
 
             self.assertTrue(result.success)
-            self.assertEqual([p.name for p in result.outputs], [f"{root.name}_colorx.tga", f"{root.name}_normalx.tga"])
+            self.assertEqual([p.name for p in result.outputs], ["TestMat_colorx.tga", "TestMat_normalx.tga"])
 
     def test_convert_pbr_folder_supports_prefix_modes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -143,9 +213,9 @@ class PBR2DayZTests(unittest.TestCase):
             result = convert_pbr_files([selected], root_context=root, normal_type="opengl", make_paa=False)
 
             self.assertTrue(result.success)
-            self.assertEqual([p.name for p in result.outputs], [f"{root.name}_co.tga"])
-            self.assertTrue((root / f"{root.name}_co.tga").exists())
-            self.assertFalse((root / f"{root.name}_nohq.tga").exists())
+            self.assertEqual([p.name for p in result.outputs], ["Door_co.tga"])
+            self.assertTrue((root / "Door_co.tga").exists())
+            self.assertFalse((root / "Door_nohq.tga").exists())
 
     def test_convert_pbr_files_uses_data_parent_for_root_context(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,7 +267,7 @@ class PBR2DayZTests(unittest.TestCase):
             )
 
             self.assertTrue(result.success)
-            expected = [f"{root.name}_co.tga", f"{root.name}_nohq.tga", f"{root.name}_smdi.tga", f"{root.name}_as.tga"]
+            expected = ["TestMat_co.tga", "TestMat_nohq.tga", "TestMat_smdi.tga", "TestMat_as.tga"]
             self.assertEqual([p.name for p in result.outputs], expected)
 
     def test_convert_pbr_folder_fuzzy_match_finds_embedded_suffix_text(self):
@@ -210,7 +280,7 @@ class PBR2DayZTests(unittest.TestCase):
 
             fuzzy = convert_pbr_folder(root, patterns={"basecolor": ["basecolormap"]}, match_mode="fuzzy")
             self.assertTrue(fuzzy.success)
-            self.assertEqual([p.name for p in fuzzy.outputs], [f"{root.name}_co.tga"])
+            self.assertEqual([p.name for p in fuzzy.outputs], ["T_VMGen_co.tga"])
 
     def test_convert_pbr_folder_exact_match_requires_suffix_token(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,7 +301,7 @@ class PBR2DayZTests(unittest.TestCase):
             result = convert_pbr_folder(root, make_paa=True, image_to_paa=Path(tmp) / "missing.exe")
 
             self.assertTrue(result.success)
-            self.assertTrue((root / f"{root.name}_co.tga").exists())
+            self.assertTrue((root / "TestMat_co.tga").exists())
             self.assertTrue(any("ImageToPAA" in message for message in result.messages))
 
     def test_convert_pbr_folder_moves_source_textures_to_recycle_bin_when_requested(self):
@@ -247,8 +317,8 @@ class PBR2DayZTests(unittest.TestCase):
 
             self.assertTrue(result.success)
             self.assertEqual({call.args[0] for call in recycle.call_args_list}, {base, rough})
-            self.assertTrue((root / f"{root.name}_co.tga").exists())
-            self.assertTrue((root / f"{root.name}_smdi.tga").exists())
+            self.assertTrue((root / "TestMat_co.tga").exists())
+            self.assertTrue((root / "TestMat_smdi.tga").exists())
 
     def test_convert_pbr_folder_deletes_tga_after_paa_when_delete_source_is_enabled(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,9 +338,9 @@ class PBR2DayZTests(unittest.TestCase):
 
             self.assertTrue(result.success)
             recycle.assert_called_once_with(base)
-            self.assertFalse((root / f"{root.name}_co.tga").exists())
-            self.assertTrue((root / f"{root.name}_co.paa").exists())
-            self.assertEqual([p.name for p in result.outputs], [f"{root.name}_co.paa"])
+            self.assertFalse((root / "TestMat_co.tga").exists())
+            self.assertTrue((root / "TestMat_co.paa").exists())
+            self.assertEqual([p.name for p in result.outputs], ["TestMat_co.paa"])
 
     def test_image_to_paa_runs_without_console_window_on_windows(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -309,8 +379,8 @@ class PBR2DayZTests(unittest.TestCase):
                     result = convert_pbr_folder(root, make_paa=True, image_to_paa=image_to_paa, add_watermark=True, watermark_content="secret", watermark_password="9")
 
             self.assertTrue(result.success)
-            self.assertEqual(calls[0], ("watermark", f"{root.name}_co.tga", "secret", "9"))
-            self.assertEqual(calls[1], ("paa", [f"{root.name}_co.tga"]))
+            self.assertEqual(calls[0], ("watermark", "TestMat_co.tga", "secret", "9"))
+            self.assertEqual(calls[1], ("paa", ["TestMat_co.tga"]))
             self.assertEqual(result.results[0].metadata["watermark_length"], 12)
 
 

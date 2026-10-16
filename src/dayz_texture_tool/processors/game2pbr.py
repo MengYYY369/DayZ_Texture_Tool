@@ -55,6 +55,50 @@ def _suffixes(processor: str, output_suffixes: dict[str, str] | None = None) -> 
     return suffixes
 
 
+# 规划用：每个处理器对应「DEFAULT_OUTPUT_SUFFIXES 里的名字」和它要产出的槽位顺序。
+# 别名（SplitAllChannelsProcessor 等）映射到各自的正名，保证跟处理函数用同一套后缀表。
+_PLAN_TARGETS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "SplitColorAlphaProcessor": ("SplitColorAlphaProcessor", ("rgb", "alpha")),
+    "SplitRGBAProcessor": ("SplitRGBAProcessor", ("r", "g", "b", "a")),
+    "SplitAllChannelsProcessor": ("SplitRGBAProcessor", ("r", "g", "b", "a")),
+    "MergeRGBAProcessor": ("MergeRGBAProcessor", ("merged",)),
+    "XYNormalMapProcessor": ("XYNormalMapProcessor", ("normal",)),
+    "BC5XYNormalMapProcessor": ("XYNormalMapProcessor", ("normal",)),
+    "DirectConvertProcessor": ("DirectConvertProcessor", ("converted",)),
+    "DirectinvertProcessor": ("DirectinvertProcessor", ("inverted",)),
+    "DirectInvertProcessor": ("DirectinvertProcessor", ("inverted",)),
+    "DF_NRM": ("DF_NRM", ("metal", "roughness", "normal")),
+    "DF_MRA": ("DF_MRA", ("metal", "roughness", "ao")),
+    "ABI_ORN": ("ABI_ORN", ("roughness", "ao", "normal")),
+}
+
+
+def plan_outputs(processor: str, path: str | Path, output_suffixes: dict[str, str] | None = None) -> list[Path]:
+    """这一张图会产出哪些文件，不真的处理。
+
+    规则跟处理函数逐条对齐：后缀表走 _suffixes，文件名走 _output；direct_convert
+    的「输出跟输入同名就退到 _converted」和 merge_rgba 的「缺 _a 图会失败」也照搬，
+    所以规划结果跟实际产物一致（dry-run 就靠它）。注定失败的输入抛异常，调用方
+    自己决定怎么记。
+    """
+    target = _PLAN_TARGETS.get(processor)
+    if target is None:
+        raise ValueError(f"Unknown processor: {processor}")
+    canonical, slots = target
+    suffixes = _suffixes(canonical, output_suffixes)
+    source = Path(path)
+    if processor == "MergeRGBAProcessor":
+        alpha_path = _output(source, "_a", source.suffix)
+        if not alpha_path.exists():
+            raise FileNotFoundError(f"Alpha image not found: {alpha_path}")
+    outputs = [_output(source, suffixes[slot]) for slot in slots]
+    if processor == "DirectConvertProcessor":
+        first = outputs[0]
+        if first.resolve() == source.resolve():
+            outputs[0] = _output(source, "_converted")
+    return outputs
+
+
 def split_color_alpha(path: Path, ext: str = ".png", output_suffixes: dict[str, str] | None = None) -> list[Path]:
     suffixes = _suffixes("SplitColorAlphaProcessor", output_suffixes)
     arr = _load_rgba(path)

@@ -41,6 +41,11 @@ def _output_path(path: Path, output_path: str | Path | None = None) -> Path:
     return path.with_name(f"{path.stem}_watermarked{path.suffix}")
 
 
+def plan_output(path: Path, overwrite: bool = False) -> Path:
+    """嵌入水印后会写到哪个文件，不真的处理。overwrite 时就是原文件本身。"""
+    return path if overwrite else _output_path(path)
+
+
 def _unsupported_image(path: Path) -> ProcessingResult | None:
     if path.suffix.lower() not in SUPPORTED_WATERMARK_EXTENSIONS:
         return ProcessingResult(False, input_path=path, processor="Watermark", error=f"Unsupported image extension for watermark: {path.suffix}")
